@@ -2,8 +2,11 @@
  * Official Meta Pixel browser integration for Namma Stores Seller Partner.
  *
  * - Reuses the existing Namma Stores Website Pixel ID: 3507843232726532
+ * - Opt-in consent model: defaults to NO tracking until user explicitly clicks "Accept Analytics"
+ * - Persists consent decision in localStorage ('namma_analytics_consent': 'accepted' | 'rejected')
+ * - Does NOT treat the seller application form privacy checkbox as analytics consent
  * - Idempotent initialization and PageView tracking (safe under React Strict Mode & rerenders)
- * - Fires standard 'Lead' event ONLY after a confirmed NEW seller application is saved
+ * - Fires standard 'Lead' event ONLY after a confirmed NEW seller application is saved AND consent is accepted
  * - Strictly non-PII: sends only `{ lead_type: 'seller_application' }` with Lead events
  * - Never enables automatic advanced matching or Conversions API
  */
@@ -12,6 +15,9 @@ export const DEFAULT_META_PIXEL_ID = '3507843232726532';
 export const META_PIXEL_SCRIPT_ID = 'namma-stores-meta-pixel-script';
 export const META_PIXEL_SCRIPT_SRC =
   'https://connect.facebook.net/en_US/fbevents.js';
+export const ANALYTICS_CONSENT_STORAGE_KEY = 'namma_analytics_consent';
+
+export type AnalyticsConsentDecision = 'accepted' | 'rejected' | 'unset';
 
 export type FbqFunction = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
@@ -28,7 +34,7 @@ export interface MetaPixelWindow {
   __NAMMA_META_PIXEL_PAGEVIEWS__?: Set<string>;
   __NAMMA_META_PIXEL_TRACKED_LEADS__?: Set<string>;
   __NAMMA_ANALYTICS_CONSENT__?: boolean;
-  localStorage?: Pick<Storage, 'getItem'>;
+  localStorage?: Pick<Storage, 'getItem'> & Partial<Pick<Storage, 'setItem'>>;
   location?: {
     pathname?: string;
     search?: string;
@@ -55,23 +61,25 @@ export interface SellerLeadTrackingInput {
   lead_id?: string | null;
   duplicate?: boolean;
   is_duplicate?: boolean;
-  privacy_acknowledged?: boolean;
   [key: string]: unknown;
 }
 
-function getDefaultEnv(): MetaPixelEnv {
+function getBuildTimeEnv(): MetaPixelEnv {
+  const result: MetaPixelEnv = {};
   try {
-    const metaEnv = (import.meta as unknown as { env?: MetaPixelEnv })?.env;
-    if (metaEnv && typeof metaEnv === 'object') {
-      return metaEnv;
+    // Direct property access so Vite statically replaces these at build time
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      if (typeof import.meta.env.VITE_META_PIXEL_ID === 'string') {
+        result.VITE_META_PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID;
+      }
+      if (typeof import.meta.env.VITE_ENABLE_ANALYTICS === 'string') {
+        result.VITE_ENABLE_ANALYTICS = import.meta.env.VITE_ENABLE_ANALYTICS;
+      }
     }
   } catch {
-    // Ignore when running outside Vite bundler
+    // Ignore outside Vite bundler
   }
-  if (typeof process !== 'undefined' && process.env) {
-    return process.env as unknown as MetaPixelEnv;
-  }
-  return {};
+  return result;
 }
 
 function getDefaultWindow(): MetaPixelWindow | undefined {
@@ -89,15 +97,16 @@ function getDefaultDocument(): Document | undefined {
 }
 
 /**
- * Resolves the active Meta Pixel ID from build-time configuration or falls back
- * to the existing Namma Stores Website Pixel (3507843232726532).
+ * Resolves the active Meta Pixel ID from Vite build-time configuration
+ * (`import.meta.env.VITE_META_PIXEL_ID`) or falls back to the existing
+ * Namma Stores Website Pixel (3507843232726532).
  * Returns null if explicitly disabled or invalid.
  */
 export function resolveMetaPixelId(
   envOverride?: MetaPixelEnv,
   explicitPixelId?: string
 ): string | null {
-  const env = envOverride ?? getDefaultEnv();
+  const env = envOverride ?? getBuildTimeEnv();
   const raw =
     explicitPixelId !== undefined
       ? explicitPixelId
@@ -131,20 +140,113 @@ export function resolveMetaPixelId(
 }
 
 /**
- * Checks whether analytics / Meta Pixel tracking is permitted by environment
- * configuration and user consent controls.
+ * Reads the persisted analytics consent decision from window or localStorage.
+ * Defaults to 'unset' (no tracking) until the user explicitly chooses Accept or Reject.
+ */
+export function getAnalyticsConsentDecision(
+  winOverride?: MetaPixelWindow
+): AnalyticsConsentDecision {
+  const win = winOverride ?? getDefaultWindow();
+  if (!win) {
+    return 'unset';
+  }
+
+  try {
+    const rawStored = win.localStorage
+      ?.getItem(ANALYTICS_CONSENT_STORAGE_KEY)
+      ?.trim()
+      .toLowerCase();
+
+    if (
+      rawStored === 'accepted' ||
+      rawStored === 'granted' ||
+      rawStored === 'true'
+    ) {
+      return 'accepted';
+    }
+
+    if (
+      rawStored === 'rejected' ||
+      rawStored === 'denied' ||
+      rawStored === 'false' ||
+      rawStored === 'opt_out'
+    ) {
+      return 'rejected';
+    }
+
+    const legacyCookieConsent = win.localStorage
+      ?.getItem('namma_cookie_consent')
+      ?.trim()
+      .toLowerCase();
+
+    if (
+      legacyCookieConsent === 'accepted' ||
+      legacyCookieConsent === 'granted' ||
+      legacyCookieConsent === 'true'
+    ) {
+      return 'accepted';
+    }
+
+    if (
+      legacyCookieConsent === 'rejected' ||
+      legacyCookieConsent === 'denied' ||
+      legacyCookieConsent === 'false'
+    ) {
+      return 'rejected';
+    }
+  } catch {
+    // Ignore storage access errors in restricted webviews/iframes
+  }
+
+  if (win.__NAMMA_ANALYTICS_CONSENT__ === true) {
+    return 'accepted';
+  }
+  if (win.__NAMMA_ANALYTICS_CONSENT__ === false) {
+    return 'rejected';
+  }
+
+  return 'unset';
+}
+
+/**
+ * Persists the user's explicit analytics consent choice ('accepted' or 'rejected').
+ * When 'accepted', immediately initializes Meta Pixel and tracks PageView for the active page.
+ */
+export function setAnalyticsConsentDecision(
+  decision: 'accepted' | 'rejected',
+  options?: MetaPixelOptions & { pageKey?: string }
+): AnalyticsConsentDecision {
+  const win = options?.win ?? getDefaultWindow();
+
+  if (win) {
+    win.__NAMMA_ANALYTICS_CONSENT__ = decision === 'accepted';
+    try {
+      if (typeof win.localStorage?.setItem === 'function') {
+        win.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, decision);
+      }
+    } catch {
+      // Ignore storage write errors
+    }
+  }
+
+  if (decision === 'accepted') {
+    trackMetaPageView(options);
+  }
+
+  return decision;
+}
+
+/**
+ * Checks whether analytics / Meta Pixel tracking is permitted by build-time
+ * configuration AND explicit user opt-in consent ('accepted').
+ * Defaults to false when consent is 'unset' or 'rejected'.
  */
 export function isMetaPixelConsentGranted(options?: {
   win?: MetaPixelWindow;
   env?: MetaPixelEnv;
-  privacyAcknowledged?: boolean;
 }): boolean {
-  const env = options?.env ?? getDefaultEnv();
+  const env = options?.env ?? getBuildTimeEnv();
   const win = options?.win ?? getDefaultWindow();
-
-  if (options?.privacyAcknowledged === false) {
-    return false;
-  }
 
   const rawEnable =
     typeof env.VITE_ENABLE_ANALYTICS === 'string'
@@ -160,53 +262,19 @@ export function isMetaPixelConsentGranted(options?: {
     return false;
   }
 
-  if (win) {
-    if (win.__NAMMA_ANALYTICS_CONSENT__ === false) {
-      return false;
-    }
-
-    try {
-      const storedAnalyticsConsent = win.localStorage
-        ?.getItem('namma_analytics_consent')
-        ?.trim()
-        .toLowerCase();
-      if (
-        storedAnalyticsConsent === 'denied' ||
-        storedAnalyticsConsent === 'false' ||
-        storedAnalyticsConsent === 'rejected' ||
-        storedAnalyticsConsent === 'opt_out'
-      ) {
-        return false;
-      }
-
-      const storedCookieConsent = win.localStorage
-        ?.getItem('namma_cookie_consent')
-        ?.trim()
-        .toLowerCase();
-      if (
-        storedCookieConsent === 'denied' ||
-        storedCookieConsent === 'false' ||
-        storedCookieConsent === 'rejected'
-      ) {
-        return false;
-      }
-    } catch {
-      // Ignore storage access errors in restricted webviews/iframes
-    }
-  }
-
-  return true;
+  return getAnalyticsConsentDecision(win) === 'accepted';
 }
 
 /**
  * Installs the official Meta Pixel base queue shim (`window.fbq`) and injects
  * `https://connect.facebook.net/en_US/fbevents.js` once into the document.
  * Calls `fbq('init', pixelId)` idempotently without automatic advanced matching or PII.
+ * Requires explicit analytics consent ('accepted').
  */
 export function initMetaPixel(options?: MetaPixelOptions): boolean {
   const win = options?.win ?? getDefaultWindow();
   const doc = options?.doc ?? getDefaultDocument();
-  const env = options?.env ?? getDefaultEnv();
+  const env = options?.env ?? getBuildTimeEnv();
 
   if (!win || !doc) {
     return false;
@@ -250,7 +318,11 @@ export function initMetaPixel(options?: MetaPixelOptions): boolean {
       ? doc.querySelector(`script[src="${META_PIXEL_SCRIPT_SRC}"]`)
       : null;
 
-  if (!existingScriptById && !existingScriptBySrc && typeof doc.createElement === 'function') {
+  if (
+    !existingScriptById &&
+    !existingScriptBySrc &&
+    typeof doc.createElement === 'function'
+  ) {
     const scriptEl = doc.createElement('script');
     scriptEl.id = META_PIXEL_SCRIPT_ID;
     scriptEl.async = true;
@@ -284,13 +356,14 @@ export function initMetaPixel(options?: MetaPixelOptions): boolean {
 /**
  * Tracks a Meta Pixel `PageView` event idempotently for the current page key,
  * preventing duplicate events from React 19 Strict Mode double-effects or rerenders.
+ * Only fires after analytics consent has been explicitly accepted.
  */
 export function trackMetaPageView(
   options?: MetaPixelOptions & { pageKey?: string }
 ): boolean {
   const win = options?.win ?? getDefaultWindow();
   const doc = options?.doc ?? getDefaultDocument();
-  const env = options?.env ?? getDefaultEnv();
+  const env = options?.env ?? getBuildTimeEnv();
 
   if (!win || !doc) {
     return false;
@@ -337,10 +410,11 @@ export function buildSellerLeadPixelParams(
 }
 
 /**
- * Fires the standard Meta Pixel `Lead` event ONLY when a seller application
- * receives a confirmed NEW submission response from `/api/submit-seller-lead`.
+ * Fires the standard Meta Pixel `Lead` event ONLY when:
+ * 1. Explicit analytics consent has been accepted by the visitor
+ * 2. A seller application receives a confirmed NEW submission response from `/api/submit-seller-lead`
  *
- * Never fires on validation errors, failed HTTP responses, or duplicate submissions.
+ * Never fires on validation errors, failed HTTP responses, duplicate submissions, or without analytics consent.
  */
 export function trackMetaSellerLead(
   submissionResult: SellerLeadTrackingInput | null | undefined,
@@ -378,19 +452,13 @@ export function trackMetaSellerLead(
 
   const win = options?.win ?? getDefaultWindow();
   const doc = options?.doc ?? getDefaultDocument();
-  const env = options?.env ?? getDefaultEnv();
+  const env = options?.env ?? getBuildTimeEnv();
 
   if (!win || !doc) {
     return false;
   }
 
-  if (
-    !isMetaPixelConsentGranted({
-      win,
-      env,
-      privacyAcknowledged: submissionResult.privacy_acknowledged,
-    })
-  ) {
+  if (!isMetaPixelConsentGranted({ win, env })) {
     return false;
   }
 

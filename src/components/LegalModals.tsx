@@ -102,10 +102,10 @@ export const LegalModals: React.FC<LegalModalsProps> = ({
                 Your contact and store location details are used strictly to: (a) assess merchant eligibility and delivery feasibility in Whitefield, Bengaluru and nearby supported neighbourhoods, (b) deliver an automated email confirmation acknowledging receipt of your submission, (c) contact you via your preferred contact method to verify your application and coordinate Seller App onboarding, and (d) prevent duplicate submissions.
               </p>
               <h4 className="font-extrabold text-[#174D35] text-sm pt-1">
-                3. Data Isolation, Security &amp; Website Measurement
+                3. Data Isolation, Security &amp; Optional Website Measurement
               </h4>
               <p>
-                All partner lead data is stored in dedicated databases protected by Row-Level Security (RLS) and strict server-side authorization. Your commercial details are never sold to external third parties or shared with competing neighbourhood merchants. To measure seller outreach effectiveness, this website uses the official Namma Stores Meta Pixel to record aggregate page views (<code>PageView</code>) and confirmed new application completions (<code>Lead</code> tagged only with <code>lead_type: &quot;seller_application&quot;</code>). We never transmit your name, phone number, email address, shop address, or form values to Meta.
+                All partner lead data is stored in dedicated databases protected by Row-Level Security (RLS) and strict server-side authorization. Your commercial details are never sold to external third parties or shared with competing neighbourhood merchants. Optional Meta Pixel analytics (Pixel ID <code>3507843232726532</code>) remain disabled by default and only run if you explicitly click <strong>Accept Analytics</strong> in the analytics preferences banner (which is independent of the form privacy notice acknowledgement). When accepted, we record only aggregate page views (<code>PageView</code>) and confirmed new application completions (<code>Lead</code> tagged strictly with <code>lead_type: &quot;seller_application&quot;</code>)—never your name, phone number, email address, shop address, or form values. You can change your choice at any time via <strong>Analytics Preferences</strong> in the footer.
               </p>
               <h4 className="font-extrabold text-[#174D35] text-sm pt-1">
                 4. Contacting Data Protection Team

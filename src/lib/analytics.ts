@@ -64,12 +64,16 @@ export {
   DEFAULT_META_PIXEL_ID,
   META_PIXEL_SCRIPT_ID,
   META_PIXEL_SCRIPT_SRC,
+  ANALYTICS_CONSENT_STORAGE_KEY,
   resolveMetaPixelId,
+  getAnalyticsConsentDecision,
+  setAnalyticsConsentDecision,
   isMetaPixelConsentGranted,
   initMetaPixel,
   trackMetaPageView,
   trackMetaSellerLead,
   buildSellerLeadPixelParams,
+  type AnalyticsConsentDecision,
 } from './metaPixel.ts';
 
 export function trackEvent(

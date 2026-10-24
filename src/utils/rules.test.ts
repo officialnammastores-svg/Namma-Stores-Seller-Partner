@@ -58,7 +58,10 @@ import {
   DEFAULT_META_PIXEL_ID,
   META_PIXEL_SCRIPT_ID,
   META_PIXEL_SCRIPT_SRC,
+  ANALYTICS_CONSENT_STORAGE_KEY,
   resolveMetaPixelId,
+  getAnalyticsConsentDecision,
+  setAnalyticsConsentDecision,
   isMetaPixelConsentGranted,
   initMetaPixel,
   trackMetaPageView,
@@ -1526,9 +1529,12 @@ test('Cloudflare Worker (worker/index.ts) and Pages Functions runtime routing, C
   assert.equal(pagesBadRes.status, 400);
 });
 
-function createMockPixelDom() {
+function createMockPixelDom(initialConsent?: 'accepted' | 'rejected') {
   const scripts: Array<{ id: string; async: boolean; src: string }> = [];
   const storage = new Map<string, string>();
+  if (initialConsent) {
+    storage.set(ANALYTICS_CONSENT_STORAGE_KEY, initialConsent);
+  }
   const win: MetaPixelWindow = {
     location: {
       pathname: '/',
@@ -1537,6 +1543,9 @@ function createMockPixelDom() {
     localStorage: {
       getItem(key: string) {
         return storage.has(key) ? storage.get(key)! : null;
+      },
+      setItem(key: string, value: string) {
+        storage.set(key, value);
       },
     },
   };
@@ -1568,8 +1577,8 @@ function createMockPixelDom() {
   return { win, doc, scripts, storage };
 }
 
-test('Meta Pixel: idempotent initialization, PageView deduplication under React Strict Mode, and existing Pixel ID 3507843232726532', () => {
-  const { win, doc, scripts } = createMockPixelDom();
+test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent initialization, PageView deduplication under React Strict Mode, and existing Pixel ID 3507843232726532', () => {
+  const { win, doc, scripts, storage } = createMockPixelDom();
 
   // 1. Default Pixel ID resolves to 3507843232726532 when VITE_META_PIXEL_ID is empty or unset
   assert.equal(resolveMetaPixelId({}), DEFAULT_META_PIXEL_ID);
@@ -1581,10 +1590,28 @@ test('Meta Pixel: idempotent initialization, PageView deduplication under React 
   assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'disabled' }), null);
   assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'invalid-id' }), null);
 
-  // 2. Calling initMetaPixel multiple times only injects 1 script and calls fbq('init', '3507843232726532') once
+  // 2. Before consent is explicitly accepted ('unset'), no script is injected and PageView does NOT fire
+  assert.equal(getAnalyticsConsentDecision(win), 'unset');
+  assert.equal(isMetaPixelConsentGranted({ win, env: {} }), false);
+  assert.equal(initMetaPixel({ win, doc, env: {} }), false);
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
+  assert.equal(scripts.length, 0);
+  assert.equal(typeof win.fbq, 'undefined');
+
+  // 3. Accepting analytics persists 'accepted', initializes Pixel once, and fires PageView once
+  assert.equal(
+    setAnalyticsConsentDecision('accepted', { win, doc, env: {} }),
+    'accepted'
+  );
+  assert.equal(storage.get(ANALYTICS_CONSENT_STORAGE_KEY), 'accepted');
+  assert.equal(getAnalyticsConsentDecision(win), 'accepted');
+  assert.equal(isMetaPixelConsentGranted({ win, env: {} }), true);
+
+  // Calling initMetaPixel / trackMetaPageView multiple times (e.g. React Strict Mode double-effect) does not duplicate script, init, or PageView
   assert.equal(initMetaPixel({ win, doc, env: {} }), true);
   assert.equal(initMetaPixel({ win, doc, env: {} }), true);
-  assert.equal(initMetaPixel({ win, doc, env: {} }), true);
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
 
   assert.equal(scripts.length, 1);
   assert.equal(scripts[0].id, META_PIXEL_SCRIPT_ID);
@@ -1593,21 +1620,14 @@ test('Meta Pixel: idempotent initialization, PageView deduplication under React 
 
   assert.equal(typeof win.fbq, 'function');
   assert.equal(Array.isArray(win.fbq?.queue), true);
-  assert.equal(win.fbq?.queue?.length, 1);
+  assert.equal(win.fbq?.queue?.length, 2);
   // Strictly 2 arguments: ['init', '3507843232726532'] (no automatic/manual advanced matching object)
   assert.deepEqual(win.fbq?.queue?.[0], ['init', '3507843232726532']);
-
-  // 3. Calling trackMetaPageView multiple times (e.g. React Strict Mode double-effect) fires PageView only once
-  assert.equal(trackMetaPageView({ win, doc, env: {} }), true);
-  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
-  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
-
-  assert.equal(win.fbq?.queue?.length, 2);
   assert.deepEqual(win.fbq?.queue?.[1], ['track', 'PageView']);
 });
 
-test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions with non-PII lead_type and never on failures or duplicates', async () => {
-  const { win, doc } = createMockPixelDom();
+test('Meta Pixel Lead tracking: fires ONLY after analytics consent is accepted and a NEW seller submission is confirmed, with non-PII lead_type and never on failures or duplicates', async () => {
+  const { win, doc } = createMockPixelDom('accepted');
   trackMetaPageView({ win, doc, env: {} });
 
   // 1. Validation error / failed request -> MUST NOT fire Lead
@@ -1618,7 +1638,6 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
         success: false,
         error: 'Please check the highlighted fields and try again.',
         lead_id: null,
-        privacy_acknowledged: true,
       },
       { win, doc, env: {} }
     ),
@@ -1634,7 +1653,6 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
         lead_id: '',
         duplicate: false,
         is_duplicate: false,
-        privacy_acknowledged: true,
       },
       { win, doc, env: {} }
     ),
@@ -1650,7 +1668,6 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
         lead_id: '5705d122-214b-4ec2-b335-d83a19bc7ce6',
         duplicate: true,
         is_duplicate: true,
-        privacy_acknowledged: true,
       },
       { win, doc, env: {} }
     ),
@@ -1664,7 +1681,6 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
         lead_id: '5705d122-214b-4ec2-b335-d83a19bc7ce6',
         duplicate: false,
         is_duplicate: true,
-        privacy_acknowledged: true,
       },
       { win, doc, env: {} }
     ),
@@ -1728,7 +1744,6 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
       shop_address: validSubmissionBody.shop_address,
       shop_category: validSubmissionBody.shop_category,
       programme_preference: validSubmissionBody.programme_preference,
-      privacy_acknowledged: true,
     },
     { win, doc, env: {} }
   );
@@ -1756,10 +1771,7 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
 
   // Calling trackMetaSellerLead a second time with the same lead_id does not fire duplicate Lead event
   assert.equal(
-    trackMetaSellerLead(
-      { ...firstData, privacy_acknowledged: true },
-      { win, doc, env: {} }
-    ),
+    trackMetaSellerLead({ ...firstData }, { win, doc, env: {} }),
     false
   );
   assert.equal(win.fbq?.queue?.length, 3);
@@ -1783,47 +1795,16 @@ test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions w
   assert.equal(duplicateData.is_duplicate, true);
 
   assert.equal(
-    trackMetaSellerLead(
-      { ...duplicateData, privacy_acknowledged: true },
-      { win, doc, env: {} }
-    ),
+    trackMetaSellerLead({ ...duplicateData }, { win, doc, env: {} }),
     false
   );
   assert.equal(win.fbq?.queue?.length, 3);
 });
 
-test('Meta Pixel consent & configuration controls: respects VITE_ENABLE_ANALYTICS, localStorage consent, and privacy_acknowledged', () => {
-  // 1. Disabled via VITE_ENABLE_ANALYTICS="false"
-  const dom1 = createMockPixelDom();
-  assert.equal(
-    isMetaPixelConsentGranted({
-      win: dom1.win,
-      env: { VITE_ENABLE_ANALYTICS: 'false' },
-    }),
-    false
-  );
-  assert.equal(
-    initMetaPixel({
-      win: dom1.win,
-      doc: dom1.doc,
-      env: { VITE_ENABLE_ANALYTICS: 'false' },
-    }),
-    false
-  );
-  assert.equal(dom1.scripts.length, 0);
-  assert.equal(dom1.win.fbq, undefined);
-
-  // 2. Disabled via localStorage namma_analytics_consent = "denied"
-  const dom2 = createMockPixelDom();
-  dom2.storage.set('namma_analytics_consent', 'denied');
-  assert.equal(
-    trackMetaPageView({ win: dom2.win, doc: dom2.doc, env: {} }),
-    false
-  );
-  assert.equal(dom2.scripts.length, 0);
-
-  // 3. Disabled when privacy_acknowledged is false on form submission
-  const dom3 = createMockPixelDom();
+test('Meta Pixel consent & configuration controls: defaults to no tracking, persists Accept/Reject, supports changing consent later, and never uses form privacy checkbox as analytics consent', () => {
+  // 1. Form privacy_acknowledged=true does NOT grant analytics consent when banner decision is unset or rejected
+  const domUnset = createMockPixelDom();
+  assert.equal(getAnalyticsConsentDecision(domUnset.win), 'unset');
   assert.equal(
     trackMetaSellerLead(
       {
@@ -1832,20 +1813,101 @@ test('Meta Pixel consent & configuration controls: respects VITE_ENABLE_ANALYTIC
         lead_id: '99999999-8888-4777-8666-555555555555',
         duplicate: false,
         is_duplicate: false,
-        privacy_acknowledged: false,
+        privacy_acknowledged: true,
       },
-      { win: dom3.win, doc: dom3.doc, env: {} }
+      { win: domUnset.win, doc: domUnset.doc, env: {} }
     ),
     false
   );
-  assert.equal(dom3.win.fbq, undefined);
+  assert.equal(domUnset.scripts.length, 0);
+  assert.equal(typeof domUnset.win.fbq, 'undefined');
 
-  // 4. buildSellerLeadPixelParams is frozen and strictly contains lead_type
+  // 2. Rejecting analytics persists 'rejected' and blocks PageView & Lead
+  assert.equal(
+    setAnalyticsConsentDecision('rejected', {
+      win: domUnset.win,
+      doc: domUnset.doc,
+      env: {},
+    }),
+    'rejected'
+  );
+  assert.equal(
+    domUnset.storage.get(ANALYTICS_CONSENT_STORAGE_KEY),
+    'rejected'
+  );
+  assert.equal(getAnalyticsConsentDecision(domUnset.win), 'rejected');
+  assert.equal(
+    trackMetaPageView({ win: domUnset.win, doc: domUnset.doc, env: {} }),
+    false
+  );
+  assert.equal(domUnset.scripts.length, 0);
+
+  // 3. Changing consent later from 'rejected' -> 'accepted' initializes Pixel and fires PageView
+  assert.equal(
+    setAnalyticsConsentDecision('accepted', {
+      win: domUnset.win,
+      doc: domUnset.doc,
+      env: {},
+    }),
+    'accepted'
+  );
+  assert.equal(
+    domUnset.storage.get(ANALYTICS_CONSENT_STORAGE_KEY),
+    'accepted'
+  );
+  assert.equal(domUnset.scripts.length, 1);
+  assert.equal(domUnset.win.fbq?.queue?.length, 2);
+
+  // 4. Changing consent later from 'accepted' -> 'rejected' prevents subsequent Lead tracking
+  assert.equal(
+    setAnalyticsConsentDecision('rejected', {
+      win: domUnset.win,
+      doc: domUnset.doc,
+      env: {},
+    }),
+    'rejected'
+  );
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: true,
+        success: true,
+        lead_id: '99999999-8888-4777-8666-555555555555',
+        duplicate: false,
+        is_duplicate: false,
+      },
+      { win: domUnset.win, doc: domUnset.doc, env: {} }
+    ),
+    false
+  );
+  assert.equal(domUnset.win.fbq?.queue?.length, 2);
+
+  // 5. Disabled via VITE_ENABLE_ANALYTICS="false" even when user accepted consent
+  const domEnvOff = createMockPixelDom('accepted');
+  assert.equal(
+    isMetaPixelConsentGranted({
+      win: domEnvOff.win,
+      env: { VITE_ENABLE_ANALYTICS: 'false' },
+    }),
+    false
+  );
+  assert.equal(
+    initMetaPixel({
+      win: domEnvOff.win,
+      doc: domEnvOff.doc,
+      env: { VITE_ENABLE_ANALYTICS: 'false' },
+    }),
+    false
+  );
+  assert.equal(domEnvOff.scripts.length, 0);
+
+  // 6. buildSellerLeadPixelParams is frozen and strictly contains lead_type
   const params = buildSellerLeadPixelParams({
     shop_name: 'Should Not Leak',
     mobile: '9845012345',
   });
   assert.deepEqual(params, { lead_type: 'seller_application' });
 });
+
 
 

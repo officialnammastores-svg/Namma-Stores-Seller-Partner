@@ -4,11 +4,17 @@
   // Full-stack deployment: Vite SPA static assets + /api/* Worker routes
   // Target Supabase Project: txmrfheminuminggtwfv
   //
-  // IMPORTANT: Never store secret keys in this file.
-  // Configure secrets via Wrangler CLI before deploying:
-  //   npx wrangler secret put SUPABASE_URL
-  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-  //   npx wrangler secret put RESEND_API_KEY
+  // 1. VITE BUILD-TIME VARIABLES (Cloudflare Dashboard -> Workers & Pages ->
+  //    namma-stores-seller-partner -> Settings -> Build -> Build variables):
+  //      VITE_META_PIXEL_ID = "3507843232726532"
+  //      VITE_ENABLE_ANALYTICS = "true"
+  //    (Note: Do NOT rely on Wrangler runtime "vars" below to populate
+  //     import.meta.env during `vite build`.)
+  //
+  // 2. WORKER RUNTIME SECRETS (Never store secret keys in this file!
+  //    Configure via Wrangler CLI or Cloudflare Dashboard -> Settings -> Variables & Secrets):
+  //      npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  //      npx wrangler secret put RESEND_API_KEY
   // ===========================================================================
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "namma-stores-seller-partner",
@@ -24,9 +30,7 @@
     "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
     "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
     "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
-    "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com",
-    "VITE_META_PIXEL_ID": "3507843232726532",
-    "VITE_ENABLE_ANALYTICS": "true"
+    "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
   },
   "env": {
     "preview": {
@@ -35,9 +39,7 @@
         "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
         "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
         "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
-        "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com",
-        "VITE_META_PIXEL_ID": "3507843232726532",
-        "VITE_ENABLE_ANALYTICS": "true"
+        "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
       }
     }
   }

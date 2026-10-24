@@ -688,7 +688,6 @@ export const SellerApplicationForm: React.FC<SellerFormProps> = ({
         lead_id: data.lead_id,
         duplicate: data.duplicate,
         is_duplicate: data.is_duplicate,
-        privacy_acknowledged: Boolean(validation.payload.privacy_acknowledged),
       });
 
       trackEvent('application_submitted_success', {

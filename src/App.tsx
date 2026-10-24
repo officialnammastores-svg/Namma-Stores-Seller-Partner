@@ -10,7 +10,13 @@ import { OnboardingSteps } from './components/OnboardingSteps.tsx';
 import { SellerApplicationForm } from './components/SellerApplicationForm.tsx';
 import { SellerFaq } from './components/SellerFaq.tsx';
 import { Footer } from './components/Footer.tsx';
-import { trackMetaPageView } from './lib/metaPixel.ts';
+import { AnalyticsConsentBanner } from './components/AnalyticsConsentBanner.tsx';
+import {
+  getAnalyticsConsentDecision,
+  setAnalyticsConsentDecision,
+  trackMetaPageView,
+  type AnalyticsConsentDecision,
+} from './lib/metaPixel.ts';
 import type { DisplayCategory } from './utils/rules.ts';
 import type { ProgrammePreferenceOption } from './types/seller.ts';
 
@@ -29,10 +35,26 @@ export default function App() {
   const [preselectedProgramme, setPreselectedProgramme] = useState<
     ProgrammePreferenceOption | ''
   >('');
+  const [analyticsDecision, setAnalyticsDecision] =
+    useState<AnalyticsConsentDecision>(() => getAnalyticsConsentDecision());
+  const [analyticsPreferencesOpen, setAnalyticsPreferencesOpen] =
+    useState(false);
 
   useEffect(() => {
     trackMetaPageView();
   }, []);
+
+  const handleAcceptAnalytics = () => {
+    const next = setAnalyticsConsentDecision('accepted');
+    setAnalyticsDecision(next);
+    setAnalyticsPreferencesOpen(false);
+  };
+
+  const handleRejectAnalytics = () => {
+    const next = setAnalyticsConsentDecision('rejected');
+    setAnalyticsDecision(next);
+    setAnalyticsPreferencesOpen(false);
+  };
 
   const scrollToForm = () => {
     const el = document.getElementById('apply-form');
@@ -54,6 +76,11 @@ export default function App() {
       el.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  const showAnalyticsBanner =
+    !privacyModalOpen &&
+    !termsModalOpen &&
+    (analyticsDecision === 'unset' || analyticsPreferencesOpen);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FFF9EF] text-[#202820] selection:bg-[#2F855A] selection:text-white overflow-x-clip">
@@ -123,6 +150,7 @@ export default function App() {
       <Footer
         onOpenPrivacy={() => setPrivacyModalOpen(true)}
         onOpenTerms={() => setTermsModalOpen(true)}
+        onOpenAnalyticsPreferences={() => setAnalyticsPreferencesOpen(true)}
       />
 
       {/* Legal Modals (Lazy-loaded on demand) */}
@@ -136,6 +164,16 @@ export default function App() {
           />
         </Suspense>
       )}
+
+      {/* Opt-In Analytics Consent Banner */}
+      <AnalyticsConsentBanner
+        decision={analyticsDecision}
+        isOpen={showAnalyticsBanner}
+        onAccept={handleAcceptAnalytics}
+        onReject={handleRejectAnalytics}
+        onClose={() => setAnalyticsPreferencesOpen(false)}
+        onOpenPrivacy={() => setPrivacyModalOpen(true)}
+      />
 
       {/* Floating WhatsApp Quick Contact Button with Expanding Wave Effect */}
       {!privacyModalOpen && !termsModalOpen && (

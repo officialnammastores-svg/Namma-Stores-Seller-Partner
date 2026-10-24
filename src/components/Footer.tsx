@@ -9,11 +9,13 @@ import {
 interface FooterProps {
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
+  onOpenAnalyticsPreferences?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenPrivacy,
   onOpenTerms,
+  onOpenAnalyticsPreferences,
 }) => {
   return (
     <footer
@@ -169,6 +171,18 @@ export const Footer: React.FC<FooterProps> = ({
             >
               Commercial Terms
             </button>
+            {onOpenAnalyticsPreferences && (
+              <>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={onOpenAnalyticsPreferences}
+                  className="ns-animated-underline hover:text-white transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
+                >
+                  Analytics Preferences
+                </button>
+              </>
+            )}
           </div>
 
           <div>© 2026 Namma Stores. All rights reserved.</div>
