@@ -24,7 +24,9 @@
     "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
     "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
     "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
-    "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
+    "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com",
+    "VITE_META_PIXEL_ID": "3507843232726532",
+    "VITE_ENABLE_ANALYTICS": "true"
   },
   "env": {
     "preview": {
@@ -33,7 +35,9 @@
         "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
         "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
         "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
-        "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
+        "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com",
+        "VITE_META_PIXEL_ID": "3507843232726532",
+        "VITE_ENABLE_ANALYTICS": "true"
       }
     }
   }

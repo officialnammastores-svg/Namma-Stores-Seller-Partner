@@ -45,7 +45,11 @@ import {
   OFFICIAL_INSTAGRAM_URL,
   InstagramIcon,
 } from './Navbar.tsx';
-import { extractUTMParams, trackEvent } from '../lib/analytics.ts';
+import {
+  extractUTMParams,
+  trackEvent,
+  trackMetaSellerLead,
+} from '../lib/analytics.ts';
 import type {
   EdgeFunctionResponse,
   ProgrammePreferenceOption,
@@ -676,11 +680,19 @@ export const SellerApplicationForm: React.FC<SellerFormProps> = ({
         email_status: resolvedEmailStatus,
       });
       setShowSuccessModal(true);
+
+      trackMetaSellerLead({
+        ok: res.ok,
+        success: true,
+        error: data.error,
+        lead_id: data.lead_id,
+        duplicate: data.duplicate,
+        is_duplicate: data.is_duplicate,
+        privacy_acknowledged: Boolean(validation.payload.privacy_acknowledged),
+      });
+
       trackEvent('application_submitted_success', {
-        category: formData.shop_category,
-        programme_preference:
-          validation.payload.programme_preference || 'unspecified',
-        referral_source: validation.payload.referral_source || 'unspecified',
+        lead_type: 'seller_application',
       });
     } catch (err: unknown) {
       const isAbort =

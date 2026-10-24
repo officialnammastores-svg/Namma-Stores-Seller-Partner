@@ -54,6 +54,18 @@ import {
 import cloudflareWorker from '../../worker/index.ts';
 import { onRequest as pagesSubmitFn } from '../../functions/api/submit-seller-lead.ts';
 import { onRequest as pagesConfigFn } from '../../functions/api/config-status.ts';
+import {
+  DEFAULT_META_PIXEL_ID,
+  META_PIXEL_SCRIPT_ID,
+  META_PIXEL_SCRIPT_SRC,
+  resolveMetaPixelId,
+  isMetaPixelConsentGranted,
+  initMetaPixel,
+  trackMetaPageView,
+  trackMetaSellerLead,
+  buildSellerLeadPixelParams,
+  type MetaPixelWindow,
+} from '../lib/metaPixel.ts';
 
 test('normalizeIndianMobile: normalizes phone formats correctly', () => {
   assert.equal(normalizeIndianMobile('9845012345').normalized, '9845012345');
@@ -1513,4 +1525,327 @@ test('Cloudflare Worker (worker/index.ts) and Pages Functions runtime routing, C
   });
   assert.equal(pagesBadRes.status, 400);
 });
+
+function createMockPixelDom() {
+  const scripts: Array<{ id: string; async: boolean; src: string }> = [];
+  const storage = new Map<string, string>();
+  const win: MetaPixelWindow = {
+    location: {
+      pathname: '/',
+      search: '',
+    },
+    localStorage: {
+      getItem(key: string) {
+        return storage.has(key) ? storage.get(key)! : null;
+      },
+    },
+  };
+
+  const doc = {
+    getElementById(id: string) {
+      return scripts.find((s) => s.id === id) || null;
+    },
+    querySelector(selector: string) {
+      if (selector === `script[src="${META_PIXEL_SCRIPT_SRC}"]`) {
+        return scripts.find((s) => s.src === META_PIXEL_SCRIPT_SRC) || null;
+      }
+      return null;
+    },
+    createElement(tag: string) {
+      assert.equal(tag, 'script');
+      return { id: '', async: false, src: '' };
+    },
+    getElementsByTagName(_tag: string) {
+      return [];
+    },
+    head: {
+      appendChild(node: { id: string; async: boolean; src: string }) {
+        scripts.push(node);
+      },
+    },
+  } as unknown as Document;
+
+  return { win, doc, scripts, storage };
+}
+
+test('Meta Pixel: idempotent initialization, PageView deduplication under React Strict Mode, and existing Pixel ID 3507843232726532', () => {
+  const { win, doc, scripts } = createMockPixelDom();
+
+  // 1. Default Pixel ID resolves to 3507843232726532 when VITE_META_PIXEL_ID is empty or unset
+  assert.equal(resolveMetaPixelId({}), DEFAULT_META_PIXEL_ID);
+  assert.equal(DEFAULT_META_PIXEL_ID, '3507843232726532');
+  assert.equal(
+    resolveMetaPixelId({ VITE_META_PIXEL_ID: '3507843232726532' }),
+    '3507843232726532'
+  );
+  assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'disabled' }), null);
+  assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'invalid-id' }), null);
+
+  // 2. Calling initMetaPixel multiple times only injects 1 script and calls fbq('init', '3507843232726532') once
+  assert.equal(initMetaPixel({ win, doc, env: {} }), true);
+  assert.equal(initMetaPixel({ win, doc, env: {} }), true);
+  assert.equal(initMetaPixel({ win, doc, env: {} }), true);
+
+  assert.equal(scripts.length, 1);
+  assert.equal(scripts[0].id, META_PIXEL_SCRIPT_ID);
+  assert.equal(scripts[0].src, META_PIXEL_SCRIPT_SRC);
+  assert.equal(scripts[0].async, true);
+
+  assert.equal(typeof win.fbq, 'function');
+  assert.equal(Array.isArray(win.fbq?.queue), true);
+  assert.equal(win.fbq?.queue?.length, 1);
+  // Strictly 2 arguments: ['init', '3507843232726532'] (no automatic/manual advanced matching object)
+  assert.deepEqual(win.fbq?.queue?.[0], ['init', '3507843232726532']);
+
+  // 3. Calling trackMetaPageView multiple times (e.g. React Strict Mode double-effect) fires PageView only once
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), true);
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
+  assert.equal(trackMetaPageView({ win, doc, env: {} }), false);
+
+  assert.equal(win.fbq?.queue?.length, 2);
+  assert.deepEqual(win.fbq?.queue?.[1], ['track', 'PageView']);
+});
+
+test('Meta Pixel Lead tracking: fires ONLY on confirmed NEW seller submissions with non-PII lead_type and never on failures or duplicates', async () => {
+  const { win, doc } = createMockPixelDom();
+  trackMetaPageView({ win, doc, env: {} });
+
+  // 1. Validation error / failed request -> MUST NOT fire Lead
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: false,
+        success: false,
+        error: 'Please check the highlighted fields and try again.',
+        lead_id: null,
+        privacy_acknowledged: true,
+      },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+
+  // 2. Network/server error even if lead_id missing -> MUST NOT fire Lead
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: true,
+        success: true,
+        lead_id: '',
+        duplicate: false,
+        is_duplicate: false,
+        privacy_acknowledged: true,
+      },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+
+  // 3. Duplicate submission (duplicate: true or is_duplicate: true) -> MUST NOT fire Lead
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: true,
+        success: true,
+        lead_id: '5705d122-214b-4ec2-b335-d83a19bc7ce6',
+        duplicate: true,
+        is_duplicate: true,
+        privacy_acknowledged: true,
+      },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: true,
+        success: true,
+        lead_id: '5705d122-214b-4ec2-b335-d83a19bc7ce6',
+        duplicate: false,
+        is_duplicate: true,
+        privacy_acknowledged: true,
+      },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+
+  // Confirm only ['init', ...] and ['track', 'PageView'] are in queue so far
+  assert.equal(win.fbq?.queue?.length, 2);
+
+  // 4. Confirmed NEW seller submission via handleSellerApiRequest -> fires Lead once with strictly non-PII { lead_type: 'seller_application' }
+  const mockDb = createMockSupabase();
+  const mockResend = (async () =>
+    new Response(JSON.stringify({ id: 're_pixel_test_1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch;
+  const apiEnv: SellerApiEnv = {
+    SUPABASE_URL: 'https://txmrfheminuminggtwfv.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'mock-service-role-key',
+    RESEND_API_KEY: 're_mock_123',
+    RESEND_FROM_EMAIL: 'Namma Stores <applications@nammastores.com>',
+  };
+
+  const validSubmissionBody = {
+    shop_name: 'Lakshmi Fresh Mart',
+    owner_name: 'Lakshmi Devi',
+    mobile: '9845099887',
+    email: 'lakshmi@example.com',
+    shop_address: 'Shop 4, Whitefield Main Road, Bengaluru 560066',
+    shop_category: 'grocery',
+    programme_preference: 'stores_near_you',
+    contact_preference: 'whatsapp',
+    referral_source: 'Google Search',
+    privacy_acknowledged: true,
+    client_submission_id: '11111111-2222-4333-8444-555555555555',
+  };
+
+  // First submission -> 201 Created (new lead)
+  const firstRes = await handleSellerApiRequest(
+    new Request('https://nammastores.com/api/submit-seller-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validSubmissionBody),
+    }),
+    apiEnv,
+    { supabaseClient: mockDb as any, fetchImpl: mockResend }
+  );
+  assert.equal(firstRes.status, 201);
+  const firstData = await firstRes.json();
+  assert.equal(firstData.duplicate, false);
+  assert.equal(firstData.is_duplicate, false);
+
+  const firedFirst = trackMetaSellerLead(
+    {
+      ...firstData,
+      // Attempt to pass PII/form fields to verify they are stripped and never sent to Meta
+      shop_name: validSubmissionBody.shop_name,
+      owner_name: validSubmissionBody.owner_name,
+      mobile: validSubmissionBody.mobile,
+      email: validSubmissionBody.email,
+      shop_address: validSubmissionBody.shop_address,
+      shop_category: validSubmissionBody.shop_category,
+      programme_preference: validSubmissionBody.programme_preference,
+      privacy_acknowledged: true,
+    },
+    { win, doc, env: {} }
+  );
+  assert.equal(firedFirst, true);
+  assert.equal(win.fbq?.queue?.length, 3);
+
+  const leadCall = win.fbq?.queue?.[2];
+  assert.deepEqual(leadCall, [
+    'track',
+    'Lead',
+    { lead_type: 'seller_application' },
+  ]);
+
+  // Verify zero PII or form values exist anywhere in the Lead parameters
+  const leadParams = leadCall?.[2] as Record<string, unknown>;
+  assert.deepEqual(Object.keys(leadParams), ['lead_type']);
+  assert.equal(leadParams.lead_type, 'seller_application');
+  assert.equal('shop_name' in leadParams, false);
+  assert.equal('owner_name' in leadParams, false);
+  assert.equal('mobile' in leadParams, false);
+  assert.equal('email' in leadParams, false);
+  assert.equal('shop_address' in leadParams, false);
+  assert.equal('shop_category' in leadParams, false);
+  assert.equal('programme_preference' in leadParams, false);
+
+  // Calling trackMetaSellerLead a second time with the same lead_id does not fire duplicate Lead event
+  assert.equal(
+    trackMetaSellerLead(
+      { ...firstData, privacy_acknowledged: true },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+  assert.equal(win.fbq?.queue?.length, 3);
+
+  // Second submission to API (duplicate within 24h) -> 200 OK with duplicate: true -> does NOT fire Lead
+  const duplicateRes = await handleSellerApiRequest(
+    new Request('https://nammastores.com/api/submit-seller-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...validSubmissionBody,
+        client_submission_id: '22222222-3333-4444-8555-666666666666',
+      }),
+    }),
+    apiEnv,
+    { supabaseClient: mockDb as any, fetchImpl: mockResend }
+  );
+  assert.equal(duplicateRes.status, 200);
+  const duplicateData = await duplicateRes.json();
+  assert.equal(duplicateData.duplicate, true);
+  assert.equal(duplicateData.is_duplicate, true);
+
+  assert.equal(
+    trackMetaSellerLead(
+      { ...duplicateData, privacy_acknowledged: true },
+      { win, doc, env: {} }
+    ),
+    false
+  );
+  assert.equal(win.fbq?.queue?.length, 3);
+});
+
+test('Meta Pixel consent & configuration controls: respects VITE_ENABLE_ANALYTICS, localStorage consent, and privacy_acknowledged', () => {
+  // 1. Disabled via VITE_ENABLE_ANALYTICS="false"
+  const dom1 = createMockPixelDom();
+  assert.equal(
+    isMetaPixelConsentGranted({
+      win: dom1.win,
+      env: { VITE_ENABLE_ANALYTICS: 'false' },
+    }),
+    false
+  );
+  assert.equal(
+    initMetaPixel({
+      win: dom1.win,
+      doc: dom1.doc,
+      env: { VITE_ENABLE_ANALYTICS: 'false' },
+    }),
+    false
+  );
+  assert.equal(dom1.scripts.length, 0);
+  assert.equal(dom1.win.fbq, undefined);
+
+  // 2. Disabled via localStorage namma_analytics_consent = "denied"
+  const dom2 = createMockPixelDom();
+  dom2.storage.set('namma_analytics_consent', 'denied');
+  assert.equal(
+    trackMetaPageView({ win: dom2.win, doc: dom2.doc, env: {} }),
+    false
+  );
+  assert.equal(dom2.scripts.length, 0);
+
+  // 3. Disabled when privacy_acknowledged is false on form submission
+  const dom3 = createMockPixelDom();
+  assert.equal(
+    trackMetaSellerLead(
+      {
+        ok: true,
+        success: true,
+        lead_id: '99999999-8888-4777-8666-555555555555',
+        duplicate: false,
+        is_duplicate: false,
+        privacy_acknowledged: false,
+      },
+      { win: dom3.win, doc: dom3.doc, env: {} }
+    ),
+    false
+  );
+  assert.equal(dom3.win.fbq, undefined);
+
+  // 4. buildSellerLeadPixelParams is frozen and strictly contains lead_type
+  const params = buildSellerLeadPixelParams({
+    shop_name: 'Should Not Leak',
+    mobile: '9845012345',
+  });
+  assert.deepEqual(params, { lead_type: 'seller_application' });
+});
+
 

@@ -58,42 +58,38 @@ export type AnalyticsEventName =
   | 'calculator_interact'
   | 'admin_status_change';
 
-export function trackEvent(name: AnalyticsEventName, properties: Record<string, unknown> = {}) {
-  // Respect user consent and configuration
-  const enableAnalytics = import.meta.env.VITE_ENABLE_ANALYTICS === 'true';
-  const metaPixelId = import.meta.env.VITE_META_PIXEL_ID;
+import { trackMetaPageView } from './metaPixel.ts';
 
-  // Log in development for auditability
-  if (import.meta.env.DEV) {
-    console.debug(`[Analytics Event: ${name}]`, properties);
-  }
+export {
+  DEFAULT_META_PIXEL_ID,
+  META_PIXEL_SCRIPT_ID,
+  META_PIXEL_SCRIPT_SRC,
+  resolveMetaPixelId,
+  isMetaPixelConsentGranted,
+  initMetaPixel,
+  trackMetaPageView,
+  trackMetaSellerLead,
+  buildSellerLeadPixelParams,
+} from './metaPixel.ts';
 
-  if (!enableAnalytics || !metaPixelId) {
-    return;
-  }
-
-  // Meta Pixel standard and custom events (if fbq is loaded on the page)
-  const win = window as unknown as { fbq?: (...args: unknown[]) => void };
-  if (typeof win.fbq === 'function') {
-    switch (name) {
-      case 'landing_page_view':
-        win.fbq('track', 'PageView');
-        break;
-      case 'application_submitted_success':
-        win.fbq('track', 'Lead', {
-          program: properties.program,
-          category_count: properties.category_count,
-        });
-        break;
-      case 'cta_click':
-        win.fbq('trackCustom', 'SellerCtaClick', properties);
-        break;
-      case 'form_start':
-        win.fbq('trackCustom', 'SellerFormStart', properties);
-        break;
-      default:
-        win.fbq('trackCustom', name, properties);
-        break;
+export function trackEvent(
+  name: AnalyticsEventName,
+  properties: Record<string, unknown> = {}
+) {
+  // Log in development for auditability (never sent to external third parties)
+  try {
+    const isDev = Boolean(
+      (import.meta as unknown as { env?: { DEV?: boolean } })?.env?.DEV
+    );
+    if (isDev) {
+      console.debug(`[Analytics Event: ${name}]`, properties);
     }
+  } catch {
+    // Ignore outside Vite
+  }
+
+  if (name === 'landing_page_view') {
+    trackMetaPageView();
   }
 }
+

@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { Navbar } from './components/Navbar.tsx';
 import { Hero } from './components/Hero.tsx';
@@ -10,6 +10,7 @@ import { OnboardingSteps } from './components/OnboardingSteps.tsx';
 import { SellerApplicationForm } from './components/SellerApplicationForm.tsx';
 import { SellerFaq } from './components/SellerFaq.tsx';
 import { Footer } from './components/Footer.tsx';
+import { trackMetaPageView } from './lib/metaPixel.ts';
 import type { DisplayCategory } from './utils/rules.ts';
 import type { ProgrammePreferenceOption } from './types/seller.ts';
 
@@ -28,6 +29,10 @@ export default function App() {
   const [preselectedProgramme, setPreselectedProgramme] = useState<
     ProgrammePreferenceOption | ''
   >('');
+
+  useEffect(() => {
+    trackMetaPageView();
+  }, []);
 
   const scrollToForm = () => {
     const el = document.getElementById('apply-form');
