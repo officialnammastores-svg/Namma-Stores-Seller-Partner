@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   normalizeIndianMobile,
   isValidEmail,
@@ -1527,6 +1529,18 @@ test('Cloudflare Worker (worker/index.ts) and Pages Functions runtime routing, C
     env: workerEnv,
   });
   assert.equal(pagesBadRes.status, 400);
+
+  // 8. Ensure public/_redirects is absent (prevents Cloudflare Worker Assets error 100324 infinite loop)
+  //    and package.json deploy script explicitly targets top-level production (--env="")
+  assert.equal(
+    fs.existsSync(path.resolve(process.cwd(), 'public/_redirects')),
+    false,
+    'public/_redirects must not exist in Worker deployment with single-page-application asset handling'
+  );
+  const pkgJson = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8')
+  );
+  assert.equal(pkgJson.scripts?.deploy, 'wrangler deploy --env=""');
 });
 
 function createMockPixelDom(initialConsent?: 'accepted' | 'rejected') {
