@@ -9,7 +9,7 @@ import {
 interface FooterProps {
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
-  onOpenAnalyticsPreferences?: () => void;
+  onOpenAnalyticsPreferences: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -20,7 +20,7 @@ export const Footer: React.FC<FooterProps> = ({
   return (
     <footer
       id="contact"
-      className="relative bg-[#0E261A] text-white pt-12 pb-24 sm:py-16 border-t border-[#174D35] overflow-hidden"
+      className="relative bg-[#0E261A] text-white pt-12 pb-24 sm:pt-16 sm:pb-20 border-t border-[#174D35] overflow-hidden"
     >
       {/* Subtle Ambient Background Orbs in Footer */}
       <div
@@ -154,38 +154,45 @@ export const Footer: React.FC<FooterProps> = ({
         </div>
 
         {/* Legal Links & Brand Footnote */}
-        <div className="pt-6 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/60">
-          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
+        <div className="pt-6 border-t border-white/15 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/75">
+          <nav
+            aria-label="Legal and analytics preferences"
+            className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-2"
+          >
             <button
               type="button"
               onClick={onOpenPrivacy}
-              className="ns-animated-underline hover:text-white transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
+              className="ns-animated-underline py-1 px-0.5 text-white/80 hover:text-white font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
             >
               Partner Privacy Notice
             </button>
-            <span>·</span>
+            <span aria-hidden="true" className="text-white/40 select-none">
+              ·
+            </span>
             <button
               type="button"
               onClick={onOpenTerms}
-              className="ns-animated-underline hover:text-white transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
+              className="ns-animated-underline py-1 px-0.5 text-white/80 hover:text-white font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
             >
               Commercial Terms
             </button>
-            {onOpenAnalyticsPreferences && (
-              <>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={onOpenAnalyticsPreferences}
-                  className="ns-animated-underline hover:text-white transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
-                >
-                  Analytics Preferences
-                </button>
-              </>
-            )}
-          </div>
+            <span aria-hidden="true" className="text-white/40 select-none">
+              ·
+            </span>
+            <button
+              id="footer-analytics-preferences-button"
+              data-testid="footer-analytics-preferences"
+              type="button"
+              onClick={onOpenAnalyticsPreferences}
+              className="ns-animated-underline py-1 px-0.5 text-white/80 hover:text-white font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF9F43] rounded-xs"
+            >
+              Analytics Preferences
+            </button>
+          </nav>
 
-          <div>© 2026 Namma Stores. All rights reserved.</div>
+          <div className="text-white/65">
+            © 2026 Namma Stores. All rights reserved.
+          </div>
         </div>
       </div>
     </footer>

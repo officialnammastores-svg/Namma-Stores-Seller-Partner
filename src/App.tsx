@@ -39,6 +39,7 @@ export default function App() {
     useState<AnalyticsConsentDecision>(() => getAnalyticsConsentDecision());
   const [analyticsPreferencesOpen, setAnalyticsPreferencesOpen] =
     useState(false);
+  const [analyticsBarDismissed, setAnalyticsBarDismissed] = useState(false);
 
   useEffect(() => {
     trackMetaPageView();
@@ -48,12 +49,26 @@ export default function App() {
     const next = setAnalyticsConsentDecision('accepted');
     setAnalyticsDecision(next);
     setAnalyticsPreferencesOpen(false);
+    setAnalyticsBarDismissed(false);
   };
 
   const handleRejectAnalytics = () => {
     const next = setAnalyticsConsentDecision('rejected');
     setAnalyticsDecision(next);
     setAnalyticsPreferencesOpen(false);
+    setAnalyticsBarDismissed(false);
+  };
+
+  const handleOpenAnalyticsPreferences = () => {
+    setPrivacyModalOpen(false);
+    setTermsModalOpen(false);
+    setAnalyticsBarDismissed(false);
+    setAnalyticsPreferencesOpen(true);
+  };
+
+  const handleCloseAnalyticsBar = () => {
+    setAnalyticsPreferencesOpen(false);
+    setAnalyticsBarDismissed(true);
   };
 
   const scrollToForm = () => {
@@ -78,7 +93,10 @@ export default function App() {
   };
 
   const showAnalyticsBanner =
-    !privacyModalOpen && !termsModalOpen && analyticsPreferencesOpen;
+    !privacyModalOpen &&
+    !termsModalOpen &&
+    (analyticsPreferencesOpen ||
+      (analyticsDecision === 'unset' && !analyticsBarDismissed));
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FFF9EF] text-[#202820] selection:bg-[#2F855A] selection:text-white overflow-x-clip">
@@ -148,7 +166,7 @@ export default function App() {
       <Footer
         onOpenPrivacy={() => setPrivacyModalOpen(true)}
         onOpenTerms={() => setTermsModalOpen(true)}
-        onOpenAnalyticsPreferences={() => setAnalyticsPreferencesOpen(true)}
+        onOpenAnalyticsPreferences={handleOpenAnalyticsPreferences}
       />
 
       {/* Legal Modals (Lazy-loaded on demand) */}
@@ -163,13 +181,14 @@ export default function App() {
         </Suspense>
       )}
 
-      {/* Opt-In Analytics Consent Banner */}
+      {/* Compact Non-Blocking Bottom Analytics Consent Bar */}
       <AnalyticsConsentBanner
         decision={analyticsDecision}
         isOpen={showAnalyticsBanner}
+        isExplicitlyOpened={analyticsPreferencesOpen}
         onAccept={handleAcceptAnalytics}
         onReject={handleRejectAnalytics}
-        onClose={() => setAnalyticsPreferencesOpen(false)}
+        onClose={handleCloseAnalyticsBar}
         onOpenPrivacy={() => setPrivacyModalOpen(true)}
       />
 
@@ -177,7 +196,11 @@ export default function App() {
       {!privacyModalOpen && !termsModalOpen && (
         <aside
           aria-label="Support chat"
-          className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-40"
+          className={`fixed right-4 sm:right-5 z-40 transition-all duration-200 ${
+            showAnalyticsBanner
+              ? 'bottom-28 sm:bottom-20'
+              : 'bottom-4 sm:bottom-5'
+          }`}
         >
           <div className="relative inline-flex items-center justify-center">
             {/* Dual staggered expanding wave rings behind the button (desktop/tablet) */}

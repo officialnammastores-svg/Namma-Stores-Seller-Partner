@@ -2022,7 +2022,7 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, reje
   assert.deepEqual(params, { lead_type: 'seller_application' });
 });
 
-test('UI components under React Strict Mode: no automatic analytics dialog on initial load, footer opens preferences dialog with current decision, and all FAQ items are collapsed by default with pointer and keyboard toggling', async () => {
+test('UI components under React Strict Mode: compact non-blocking first-visit consent bar, ignored consent, acceptance, rejection, later footer preference changes, and FAQ collapsed by default', async () => {
   const nodeModule = await import('node:module');
   const fs = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
@@ -2059,7 +2059,7 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
   const React = await import('react');
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { default: App } = await import('../App.tsx');
-  const { SellerFaq, FAQ_ITEMS, toggleFaqItem } = await import(
+  const { SellerFaq, FAQ_ITEMS } = await import(
     '../components/SellerFaq.tsx'
   );
   const {
@@ -2068,17 +2068,40 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
   } = await import('../components/AnalyticsConsentBanner.tsx');
   const { Footer } = await import('../components/Footer.tsx');
 
-  // 1. Render full <App /> twice (simulating initial load and refresh) under <React.StrictMode>
+  // 1. Render full <App /> twice (simulating initial load and refresh) under <React.StrictMode> when consent is unset
   for (let mountPass = 0; mountPass < 2; mountPass++) {
     const appHtml = renderToStaticMarkup(
       React.createElement(React.StrictMode, null, React.createElement(App))
     );
 
-    // Verify NO automatic Analytics Preferences dialog appears on initial page load
-    assert.equal(appHtml.includes('id="analytics-preferences-title"'), false);
-    assert.equal(appHtml.includes('role="dialog"'), false);
+    // Verify compact, non-blocking bottom consent bar renders on first visit (unset state)
+    assert.equal(appHtml.includes('data-testid="analytics-consent-bar"'), true);
+    assert.equal(appHtml.includes('role="region"'), true);
+    assert.equal(
+      appHtml.includes(
+        'Optional Meta analytics measures website visits and completed seller applications'
+      ),
+      true
+    );
+    assert.equal(appHtml.includes('>Accept Analytics</button>'), true);
+    assert.equal(appHtml.includes('>Reject Analytics</button>'), true);
 
-    // Verify Footer contains the accessible "Analytics Preferences" button
+    // Verify NO dark overlay backdrop or blocking modal is rendered on initial load
+    assert.equal(appHtml.includes('role="dialog"'), false);
+    assert.equal(appHtml.includes('aria-modal="true"'), false);
+    assert.equal(appHtml.includes('fixed inset-0'), false);
+
+    // Verify Footer contains the accessible "Analytics Preferences" button beside Partner Privacy Notice and Commercial Terms
+    assert.equal(
+      appHtml.includes('id="footer-analytics-preferences-button"'),
+      true
+    );
+    assert.equal(
+      appHtml.includes('data-testid="footer-analytics-preferences"'),
+      true
+    );
+    assert.equal(appHtml.includes('>Partner Privacy Notice</button>'), true);
+    assert.equal(appHtml.includes('>Commercial Terms</button>'), true);
     assert.equal(appHtml.includes('>Analytics Preferences</button>'), true);
 
     // Verify EVERY FAQ item (including the first item 'eligibility') is collapsed by default
@@ -2101,7 +2124,7 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
     }
   }
 
-  // 2. Verify <AnalyticsConsentBanner /> remains hidden when isOpen=false and opens only when isOpen=true, displaying the exact current decision
+  // 2. Verify <AnalyticsConsentBanner /> remains hidden when isOpen=false and renders the non-blocking bottom bar when isOpen=true
   const closedBannerHtml = renderToStaticMarkup(
     React.createElement(AnalyticsConsentBanner, {
       decision: 'unset',
@@ -2125,8 +2148,13 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
         onOpenPrivacy: () => {},
       })
     );
-    assert.equal(openBannerHtml.includes('role="dialog"'), true);
-    assert.equal(openBannerHtml.includes('aria-modal="true"'), true);
+    assert.equal(
+      openBannerHtml.includes('data-testid="analytics-consent-bar"'),
+      true
+    );
+    assert.equal(openBannerHtml.includes('role="dialog"'), false);
+    assert.equal(openBannerHtml.includes('aria-modal="true"'), false);
+    assert.equal(openBannerHtml.includes('fixed inset-0'), false);
     assert.equal(openBannerHtml.includes('Accept Analytics'), true);
     assert.equal(openBannerHtml.includes('Reject Analytics'), true);
     assert.equal(openBannerHtml.includes('Partner Privacy Notice'), true);
@@ -2138,15 +2166,7 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
     );
   }
 
-  // 3. Verify Footer "Analytics Preferences" control triggers the callback when activated
-  let footerOpenedPreferences = false;
-  const footerElement = Footer({
-    onOpenPrivacy: () => {},
-    onOpenTerms: () => {},
-    onOpenAnalyticsPreferences: () => {
-      footerOpenedPreferences = true;
-    },
-  });
+  // 3. End-to-end consent flows: initial unset state, ignored consent, first-visit rejection, first-visit acceptance, and later preference changes via Footer
   function findButtonByText(node: any, text: string): any {
     if (!node || typeof node !== 'object') return null;
     if (node.type === 'button' && node.props?.children === text) {
@@ -2163,10 +2183,227 @@ test('UI components under React Strict Mode: no automatic analytics dialog on in
     }
     return null;
   }
+
+  function findButtonByAriaLabel(node: any, label: string): any {
+    if (!node || typeof node !== 'object') return null;
+    if (node.type === 'button' && node.props?.['aria-label'] === label) {
+      return node;
+    }
+    const children = Array.isArray(node.props?.children)
+      ? node.props.children
+      : node.props?.children
+        ? [node.props.children]
+        : [];
+    for (const child of children) {
+      const found = findButtonByAriaLabel(child, label);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  // 3a. Initial unset state & ignored/dismissed consent -> analytics stays completely disabled
+  const interactivePixelDom = createMockPixelDom();
+  let preferencesExplicitlyOpen = false;
+  let barDismissed = false;
+  let currentDecision = getAnalyticsConsentDecision(interactivePixelDom.win);
+
+  const isConsentBarVisible = () =>
+    preferencesExplicitlyOpen || (currentDecision === 'unset' && !barDismissed);
+
+  let capturedDialogTree: any = null;
+  function DialogTreeCapture() {
+    capturedDialogTree = AnalyticsConsentBanner({
+      decision: currentDecision,
+      isOpen: isConsentBarVisible(),
+      isExplicitlyOpened: preferencesExplicitlyOpen,
+      onAccept: () => {
+        currentDecision = setAnalyticsConsentDecision('accepted', {
+          win: interactivePixelDom.win,
+          doc: interactivePixelDom.doc,
+          env: {},
+        });
+        preferencesExplicitlyOpen = false;
+        barDismissed = false;
+      },
+      onReject: () => {
+        currentDecision = setAnalyticsConsentDecision('rejected', {
+          win: interactivePixelDom.win,
+          doc: interactivePixelDom.doc,
+          env: {},
+        });
+        preferencesExplicitlyOpen = false;
+        barDismissed = false;
+      },
+      onClose: () => {
+        preferencesExplicitlyOpen = false;
+        barDismissed = true;
+      },
+      onOpenPrivacy: () => {},
+    });
+    return capturedDialogTree;
+  }
+
+  const renderInteractiveDialog = () => {
+    renderToStaticMarkup(React.createElement(DialogTreeCapture));
+    return capturedDialogTree;
+  };
+
+  // On initial page load: bar is visible because currentDecision === 'unset', but Pixel is NOT loaded and PageView is NOT fired
+  assert.equal(currentDecision, 'unset');
+  assert.equal(isConsentBarVisible(), true);
+  trackMetaPageView({
+    win: interactivePixelDom.win,
+    doc: interactivePixelDom.doc,
+    env: {},
+  });
+  assert.equal(interactivePixelDom.scripts.length, 0);
+  assert.equal(typeof interactivePixelDom.win.fbq, 'undefined');
+  assert.equal(
+    interactivePixelDom.storage.has(ANALYTICS_CONSENT_STORAGE_KEY),
+    false
+  );
+
+  // If visitor ignores or dismisses the bar via Close button, consent is NOT inferred and analytics remains disabled
+  const initialBarTree = renderInteractiveDialog();
+  assert.ok(initialBarTree, 'First-visit consent bar must render when unset');
+  const closeBtn = findButtonByAriaLabel(
+    initialBarTree,
+    'Close analytics preferences'
+  );
+  assert.ok(closeBtn, 'Close button must exist on consent bar');
+  closeBtn.props.onClick();
+  assert.equal(isConsentBarVisible(), false);
+  assert.equal(currentDecision, 'unset');
+  assert.equal(
+    interactivePixelDom.storage.has(ANALYTICS_CONSENT_STORAGE_KEY),
+    false
+  );
+  assert.equal(interactivePixelDom.scripts.length, 0);
+
+  // 3b. First-visit rejection flow -> persists namma_analytics_consent=rejected and keeps Meta Pixel completely disabled
+  const rejectDom = createMockPixelDom();
+  let rejectDecision = getAnalyticsConsentDecision(rejectDom.win);
+  let rejectBarTree: any = null;
+  function RejectBarCapture() {
+    rejectBarTree = AnalyticsConsentBanner({
+      decision: rejectDecision,
+      isOpen: rejectDecision === 'unset',
+      onAccept: () => {},
+      onReject: () => {
+        rejectDecision = setAnalyticsConsentDecision('rejected', {
+          win: rejectDom.win,
+          doc: rejectDom.doc,
+          env: {},
+        });
+      },
+      onClose: () => {},
+      onOpenPrivacy: () => {},
+    });
+    return rejectBarTree;
+  }
+  renderToStaticMarkup(React.createElement(RejectBarCapture));
+  const firstVisitRejectBtn = findButtonByText(
+    rejectBarTree,
+    'Reject Analytics'
+  );
+  assert.ok(firstVisitRejectBtn);
+  firstVisitRejectBtn.props.onClick();
+  assert.equal(rejectDecision, 'rejected');
+  assert.equal(rejectDom.storage.get(ANALYTICS_CONSENT_STORAGE_KEY), 'rejected');
+  assert.equal(rejectDom.scripts.length, 0);
+  assert.equal(typeof rejectDom.win.fbq, 'undefined');
+  renderToStaticMarkup(React.createElement(RejectBarCapture));
+  assert.equal(rejectBarTree, null);
+
+  // 3c. Footer Analytics Preferences control re-opens the bar and supports accepting and later changing preferences
+  const footerElement = Footer({
+    onOpenPrivacy: () => {},
+    onOpenTerms: () => {},
+    onOpenAnalyticsPreferences: () => {
+      barDismissed = false;
+      preferencesExplicitlyOpen = true;
+    },
+  });
+
+  const privacyFooterBtn = findButtonByText(
+    footerElement,
+    'Partner Privacy Notice'
+  );
+  const termsFooterBtn = findButtonByText(footerElement, 'Commercial Terms');
   const prefsBtn = findButtonByText(footerElement, 'Analytics Preferences');
+  assert.ok(
+    privacyFooterBtn,
+    'Partner Privacy Notice button must exist in Footer'
+  );
+  assert.ok(termsFooterBtn, 'Commercial Terms button must exist in Footer');
   assert.ok(prefsBtn, 'Analytics Preferences button must exist in Footer');
+  assert.equal(prefsBtn.props.id, 'footer-analytics-preferences-button');
+  assert.equal(
+    prefsBtn.props['data-testid'],
+    'footer-analytics-preferences'
+  );
+  assert.equal(
+    String(prefsBtn.props.className).includes('focus-visible:ring-2'),
+    true,
+    'Footer Analytics Preferences button must include visible keyboard focus styling'
+  );
+
+  // Clicking Footer "Analytics Preferences" opens the consent bar
   prefsBtn.props.onClick();
-  assert.equal(footerOpenedPreferences, true);
+  assert.equal(isConsentBarVisible(), true);
+
+  const openDialogTree = renderInteractiveDialog();
+  assert.ok(openDialogTree, 'Consent bar must render when opened from Footer');
+  const acceptBtn = findButtonByText(openDialogTree, 'Accept Analytics');
+  const rejectBtn = findButtonByText(openDialogTree, 'Reject Analytics');
+  assert.ok(acceptBtn, 'Accept Analytics button must exist in consent bar');
+  assert.ok(rejectBtn, 'Reject Analytics button must exist in consent bar');
+  assert.equal(acceptBtn.props['aria-pressed'], false);
+  assert.equal(rejectBtn.props['aria-pressed'], false);
+
+  // Visitor clicks "Accept Analytics" -> persists 'accepted', initializes Pixel 2262342567669588, fires PageView once, and hides bar
+  acceptBtn.props.onClick();
+  assert.equal(isConsentBarVisible(), false);
+  assert.equal(currentDecision, 'accepted');
+  assert.equal(
+    interactivePixelDom.storage.get(ANALYTICS_CONSENT_STORAGE_KEY),
+    'accepted'
+  );
+  assert.equal(interactivePixelDom.scripts.length, 1);
+  assert.deepEqual(interactivePixelDom.win.fbq?.queue?.[0], [
+    'init',
+    '2262342567669588',
+  ]);
+  assert.deepEqual(interactivePixelDom.win.fbq?.queue?.[1], [
+    'track',
+    'PageView',
+  ]);
+  assert.equal(renderInteractiveDialog(), null);
+
+  // Visitor re-opens "Analytics Preferences" from Footer and clicks "Reject Analytics" -> persists 'rejected', clears queue, and hides bar
+  prefsBtn.props.onClick();
+  assert.equal(isConsentBarVisible(), true);
+  const reopenedDialogTree = renderInteractiveDialog();
+  const acceptBtnAfterAccept = findButtonByText(
+    reopenedDialogTree,
+    'Accept Analytics'
+  );
+  const rejectBtnAfterAccept = findButtonByText(
+    reopenedDialogTree,
+    'Reject Analytics'
+  );
+  assert.equal(acceptBtnAfterAccept.props['aria-pressed'], true);
+  assert.equal(rejectBtnAfterAccept.props['aria-pressed'], false);
+
+  rejectBtnAfterAccept.props.onClick();
+  assert.equal(isConsentBarVisible(), false);
+  assert.equal(currentDecision, 'rejected');
+  assert.equal(
+    interactivePixelDom.storage.get(ANALYTICS_CONSENT_STORAGE_KEY),
+    'rejected'
+  );
+  assert.equal(interactivePixelDom.win.fbq?.queue?.length, 0);
+  assert.equal(renderInteractiveDialog(), null);
 
   // 4. Verify <SellerFaq /> initial state and actual pointer (onClick) & keyboard (onKeyDown Enter/Space) interactions on the component
   const faqInitialHtml = renderToStaticMarkup(
