@@ -1591,15 +1591,19 @@ function createMockPixelDom(initialConsent?: 'accepted' | 'rejected') {
   return { win, doc, scripts, storage };
 }
 
-test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent initialization, PageView deduplication under React Strict Mode, and existing Pixel ID 3507843232726532', () => {
+test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent initialization, PageView deduplication under React Strict Mode, and canonical Pixel ID 2262342567669588', () => {
   const { win, doc, scripts, storage } = createMockPixelDom();
 
-  // 1. Default Pixel ID resolves to 3507843232726532 when VITE_META_PIXEL_ID is empty or unset
+  // 1. Default Pixel ID resolves to 2262342567669588 when VITE_META_PIXEL_ID is empty or unset, and VITE_META_PIXEL_ID overrides when supplied
   assert.equal(resolveMetaPixelId({}), DEFAULT_META_PIXEL_ID);
-  assert.equal(DEFAULT_META_PIXEL_ID, '3507843232726532');
+  assert.equal(DEFAULT_META_PIXEL_ID, '2262342567669588');
   assert.equal(
-    resolveMetaPixelId({ VITE_META_PIXEL_ID: '3507843232726532' }),
-    '3507843232726532'
+    resolveMetaPixelId({ VITE_META_PIXEL_ID: '2262342567669588' }),
+    '2262342567669588'
+  );
+  assert.equal(
+    resolveMetaPixelId({ VITE_META_PIXEL_ID: '1234567890123456' }),
+    '1234567890123456'
   );
   assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'disabled' }), null);
   assert.equal(resolveMetaPixelId({ VITE_META_PIXEL_ID: 'invalid-id' }), null);
@@ -1635,9 +1639,27 @@ test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent 
   assert.equal(typeof win.fbq, 'function');
   assert.equal(Array.isArray(win.fbq?.queue), true);
   assert.equal(win.fbq?.queue?.length, 2);
-  // Strictly 2 arguments: ['init', '3507843232726532'] (no automatic/manual advanced matching object)
-  assert.deepEqual(win.fbq?.queue?.[0], ['init', '3507843232726532']);
+  // Strictly 2 arguments: ['init', '2262342567669588'] (no automatic/manual advanced matching object)
+  assert.deepEqual(win.fbq?.queue?.[0], ['init', '2262342567669588']);
   assert.deepEqual(win.fbq?.queue?.[1], ['track', 'PageView']);
+  assert.deepEqual(
+    Array.from(win.__NAMMA_META_PIXEL_INITIALIZED_IDS__ ?? []),
+    ['2262342567669588']
+  );
+  assert.equal(
+    win.__NAMMA_META_PIXEL_INITIALIZED_IDS__?.has('3507843232726532'),
+    false
+  );
+
+  // 4. Verify index.html has no raw fbq snippet, no <noscript> tracking beacon, and no legacy Pixel ID
+  const indexHtmlContent = fs.readFileSync(
+    path.resolve(process.cwd(), 'index.html'),
+    'utf8'
+  );
+  assert.equal(indexHtmlContent.includes('fbevents.js'), false);
+  assert.equal(indexHtmlContent.includes('facebook.com/tr'), false);
+  assert.equal(indexHtmlContent.includes('<noscript'), false);
+  assert.equal(indexHtmlContent.includes('3507843232726532'), false);
 });
 
 test('Meta Pixel Lead tracking: fires ONLY after analytics consent is accepted and a NEW seller submission is confirmed, with non-PII lead_type and never on failures or duplicates', async () => {

@@ -6,7 +6,7 @@
   //
   // 1. VITE BUILD-TIME VARIABLES (Cloudflare Dashboard -> Workers & Pages ->
   //    namma-stores-seller-partner -> Settings -> Build -> Build variables):
-  //      VITE_META_PIXEL_ID = "3507843232726532"
+  //      VITE_META_PIXEL_ID = "2262342567669588"
   //      VITE_ENABLE_ANALYTICS = "true"
   //    (Note: Do NOT rely on Wrangler runtime "vars" below to populate
   //     import.meta.env during `vite build`.)
