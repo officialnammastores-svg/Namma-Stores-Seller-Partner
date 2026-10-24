@@ -1,0 +1,416 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-brand-forest: #174D35;
+    --color-brand-fresh: #2F855A;
+    --color-brand-cream: #FFF9EF;
+    --color-brand-mango: #FF9F43;
+    --color-brand-mint: #E5F4E8;
+    --color-brand-dark: #202820;
+    --color-brand-muted: #68776C;
+  }
+
+  html,
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    scroll-behavior: smooth;
+    background-color: #FFF9EF;
+    color: #202820;
+    overflow-x: clip;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Manrope', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  section[id],
+  footer[id] {
+    scroll-margin-top: 5rem;
+  }
+}
+
+/* ============================================================================
+   NAMMA STORES — PREMIUM AMBIENT BACKGROUND & INTERACTIVE ANIMATIONS
+   Calm, organic, GPU-accelerated keyframes with asynchronous durations
+   ============================================================================ */
+
+@keyframes ns-orb-drift-primary {
+  0% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(42px, -28px, 0) scale(1.08);
+  }
+  66% {
+    transform: translate3d(-24px, 22px, 0) scale(0.95);
+  }
+  100% {
+    transform: translate3d(28px, 16px, 0) scale(1.05);
+  }
+}
+
+@keyframes ns-orb-drift-secondary {
+  0% {
+    transform: translate3d(0px, 0px, 0) scale(1);
+  }
+  35% {
+    transform: translate3d(-48px, 30px, 0) scale(1.1);
+  }
+  70% {
+    transform: translate3d(32px, -24px, 0) scale(0.94);
+  }
+  100% {
+    transform: translate3d(-20px, -18px, 0) scale(1.04);
+  }
+}
+
+@keyframes ns-orb-drift-tertiary {
+  0% {
+    transform: translate3d(0px, 0px, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(36px, 34px, 0) scale(1.12) rotate(6deg);
+  }
+  100% {
+    transform: translate3d(-34px, -22px, 0) scale(0.96) rotate(-4deg);
+  }
+}
+
+@keyframes ns-light-wash-sweep {
+  0% {
+    transform: translate3d(-12%, -6%, 0) rotate(-4deg) scale(1.05);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(10%, 4%, 0) rotate(2deg) scale(1.12);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate3d(-6%, 8%, 0) rotate(-2deg) scale(1.02);
+    opacity: 0.6;
+  }
+}
+
+@keyframes ns-organic-ribbon-float {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(-22px, 16px, 0) rotate(2.5deg) scale(1.03);
+  }
+  100% {
+    transform: translate3d(18px, -14px, 0) rotate(-2deg) scale(0.98);
+  }
+}
+
+@keyframes ns-organic-ribbon-float-alt {
+  0% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(26px, -18px, 0) rotate(-3deg) scale(1.04);
+  }
+  100% {
+    transform: translate3d(-16px, 20px, 0) rotate(2deg) scale(0.97);
+  }
+}
+
+@keyframes ns-card-halo-breathe {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.98);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(0, -4px, 0) scale(1.04);
+    opacity: 0.85;
+  }
+}
+
+@keyframes ns-step-connector-flow {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(220%);
+    opacity: 0;
+  }
+}
+
+/* Order Workflow (Step 1 -> Step 5) horizontal & vertical running indicator */
+@keyframes ns-order-flow-horizontal {
+  0% {
+    left: 0%;
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    left: calc(100% - 2.5rem);
+    opacity: 0;
+  }
+}
+
+@keyframes ns-order-flow-vertical {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    top: calc(100% - 2.25rem);
+    opacity: 0;
+  }
+}
+
+@keyframes ns-order-step-pulse {
+  0%, 100% {
+    border-color: rgba(23, 77, 53, 0.12);
+    box-shadow: 0 4px 14px -6px rgba(23, 77, 53, 0.06);
+  }
+  8%, 18% {
+    border-color: rgba(47, 133, 90, 0.65);
+    box-shadow: 0 0 0 2px rgba(47, 133, 90, 0.14), 0 8px 20px -6px rgba(23, 77, 53, 0.14);
+  }
+  24% {
+    border-color: rgba(23, 77, 53, 0.12);
+    box-shadow: 0 4px 14px -6px rgba(23, 77, 53, 0.06);
+  }
+}
+
+@keyframes ns-order-step-pulse-urgent {
+  0%, 100% {
+    border-color: rgba(255, 159, 67, 0.5);
+    box-shadow: 0 6px 18px -8px rgba(255, 159, 67, 0.16);
+  }
+  8%, 18% {
+    border-color: rgba(255, 106, 0, 0.85);
+    box-shadow: 0 0 0 2px rgba(255, 159, 67, 0.25), 0 8px 22px -6px rgba(255, 106, 0, 0.22);
+  }
+  24% {
+    border-color: rgba(255, 159, 67, 0.5);
+    box-shadow: 0 6px 18px -8px rgba(255, 159, 67, 0.16);
+  }
+}
+
+/* Subtle breathing glow for WhatsApp navigation button */
+@keyframes ns-whatsapp-nav-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(47, 133, 90, 0.14), 0 2px 10px -1px rgba(47, 133, 90, 0.16);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(47, 133, 90, 0.12), 0 4px 16px 0px rgba(37, 211, 102, 0.28);
+  }
+}
+
+/* Expanding wave ring for floating Chat with Us button */
+@keyframes ns-whatsapp-expanding-wave {
+  0% {
+    transform: scale(0.96);
+    opacity: 0.65;
+  }
+  70% {
+    transform: scale(1.38, 1.55);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.42, 1.6);
+    opacity: 0;
+  }
+}
+
+.animate-ns-orb-1 {
+  animation: ns-orb-drift-primary 16s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.animate-ns-orb-2 {
+  animation: ns-orb-drift-secondary 21s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.animate-ns-orb-3 {
+  animation: ns-orb-drift-tertiary 25s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.animate-ns-light-wash {
+  animation: ns-light-wash-sweep 18s ease-in-out infinite alternate;
+}
+
+.animate-ns-organic-1 {
+  animation: ns-organic-ribbon-float 20s ease-in-out infinite alternate;
+}
+
+.animate-ns-organic-2 {
+  animation: ns-organic-ribbon-float-alt 24s ease-in-out infinite alternate;
+}
+
+.animate-ns-halo {
+  animation: ns-card-halo-breathe 9s ease-in-out infinite;
+}
+
+.animate-ns-step-beam {
+  animation: ns-step-connector-flow 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-ns-order-flow-h {
+  animation: ns-order-flow-horizontal 7.5s linear infinite;
+}
+
+.animate-ns-order-flow-v {
+  animation: ns-order-flow-vertical 7.5s linear infinite;
+}
+
+.animate-ns-order-card {
+  animation: ns-order-step-pulse 7.5s ease-in-out infinite;
+}
+
+.animate-ns-order-card-urgent {
+  animation: ns-order-step-pulse-urgent 7.5s ease-in-out infinite;
+}
+
+.animate-ns-whatsapp-glow {
+  animation: ns-whatsapp-nav-glow 3.6s ease-in-out infinite;
+}
+
+.animate-ns-chat-wave {
+  animation: ns-whatsapp-expanding-wave 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-ns-chat-wave-delayed {
+  animation: ns-whatsapp-expanding-wave 2.8s cubic-bezier(0.16, 1, 0.3, 1) 1.4s infinite;
+}
+
+/* Responsive category selector grid:
+   - 1 column on ultra-narrow screens (<340px)
+   - 2 columns on mobile & tablet (340px to 1023px)
+   - 3 columns on desktop (1024px+) */
+.ns-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 339px) {
+  .ns-category-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ns-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Mobile GPU & battery optimization: pause continuous decorative background motion
+   below 768px while preserving static gradients, shapes, positions, and visual identity */
+@media (max-width: 767px) {
+  .animate-ns-orb-1,
+  .animate-ns-orb-2,
+  .animate-ns-orb-3,
+  .animate-ns-light-wash,
+  .animate-ns-organic-1,
+  .animate-ns-organic-2,
+  .animate-ns-halo,
+  .animate-ns-step-beam,
+  .animate-ns-whatsapp-glow {
+    animation: none;
+  }
+}
+
+/* Animated underline utility for navigation & contact links */
+.ns-animated-underline {
+  position: relative;
+}
+
+.ns-animated-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #174D35 0%, #2F855A 60%, #FF9F43 100%);
+  transform: scaleX(0);
+  transform-origin: bottom right;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ns-animated-underline:hover::after,
+.ns-animated-underline:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: bottom left;
+}
+
+/* Subtle architectural dot/grid texture with soft radial fade */
+.bg-ns-subtle-grid {
+  background-image: radial-gradient(rgba(23, 77, 53, 0.11) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 75% at 50% 45%, #000 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 50% 45%, #000 35%, transparent 100%);
+}
+
+/* Ambient surface helpers */
+.bg-cream-radial {
+  background: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #FFF9EF 75%, #FBF3E4 100%);
+}
+
+.bg-mint-subtle {
+  background-color: #E5F4E8;
+}
+
+.shadow-soft-card {
+  box-shadow: 0 4px 20px -2px rgba(23, 77, 53, 0.06), 0 2px 6px -1px rgba(23, 77, 53, 0.04);
+}
+
+.shadow-elevated {
+  box-shadow: 0 14px 36px -6px rgba(23, 77, 53, 0.11), 0 4px 12px -2px rgba(23, 77, 53, 0.05);
+}
+
+/* Accessibility: Pause ambient motion when user prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-ns-orb-1,
+  .animate-ns-orb-2,
+  .animate-ns-orb-3,
+  .animate-ns-light-wash,
+  .animate-ns-organic-1,
+  .animate-ns-organic-2,
+  .animate-ns-halo,
+  .animate-ns-step-beam,
+  .animate-ns-order-flow-h,
+  .animate-ns-order-flow-v,
+  .animate-ns-order-card,
+  .animate-ns-order-card-urgent,
+  .animate-ns-whatsapp-glow,
+  .animate-ns-chat-wave,
+  .animate-ns-chat-wave-delayed {
+    animation: none !important;
+    transform: none !important;
+  }
+}

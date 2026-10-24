@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" fill="none">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#174D35" />
+      <stop offset="100%" stop-color="#0E3322" />
+    </linearGradient>
+    <linearGradient id="badgeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF9F43" />
+      <stop offset="100%" stop-color="#FF6A00" />
+    </linearGradient>
+    <filter id="markShadow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Squircle Background -->
+  <rect x="4" y="4" width="112" height="112" rx="26" fill="url(#bgGradient)" />
+  <rect x="5.5" y="5.5" width="109" height="109" rx="24.5" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="2" />
+
+  <!-- Official Namma Stores Brand Mark (Orange Roof, Green Body, White N) -->
+  <g transform="translate(26, 12) scale(0.56)" filter="url(#markShadow)">
+    <path d="M60 12L102 44C104 45.5 103 48 100.5 48H19.5C17 48 16 45.5 18 44L60 12Z" fill="#FF6A00"/>
+    <path d="M19 50H101L93.5 106C92.8 111 88.5 115 83.5 115H36.5C31.5 115 27.2 111 26.5 106L19 50Z" fill="#0A8754"/>
+    <path d="M46 96V68.5C46 67.1 47.1 66 48.5 66H50.5C51.6 66 52.6 66.6 53.2 67.5L68 91V68.5C68 67.1 69.1 66 70.5 66H73.5C74.9 66 76 67.1 76 68.5V96C76 97.4 74.9 98.5 73.5 98.5H71.5C70.4 98.5 69.4 97.9 68.8 97L54 73.5V96C54 97.4 52.9 98.5 51.5 98.5H48.5C47.1 98.5 46 97.4 46 96Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Seller Partner App Label -->
+  <g transform="translate(18, 84)">
+    <rect width="84" height="20" rx="10" fill="url(#badgeGradient)" />
+    <text x="42" y="13.5" font-family="'Manrope', 'Inter', system-ui, sans-serif" font-size="8.5" font-weight="800" letter-spacing="0.06em" fill="#FFFFFF" text-anchor="middle">SELLER PARTNER</text>
+  </g>
+</svg>

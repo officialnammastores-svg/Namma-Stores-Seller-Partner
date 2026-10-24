@@ -1,0 +1,40 @@
+{
+  // ===========================================================================
+  // NAMMA STORES SELLER PARTNER — CLOUDFLARE WORKERS CONFIGURATION
+  // Full-stack deployment: Vite SPA static assets + /api/* Worker routes
+  // Target Supabase Project: txmrfheminuminggtwfv
+  //
+  // IMPORTANT: Never store secret keys in this file.
+  // Configure secrets via Wrangler CLI before deploying:
+  //   npx wrangler secret put SUPABASE_URL
+  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  //   npx wrangler secret put RESEND_API_KEY
+  // ===========================================================================
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "namma-stores-seller-partner",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-02-14",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "vars": {
+    "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
+    "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
+    "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
+    "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
+  },
+  "env": {
+    "preview": {
+      "name": "namma-stores-seller-partner-preview",
+      "vars": {
+        "SUPABASE_URL": "https://txmrfheminuminggtwfv.supabase.co",
+        "RESEND_FROM_EMAIL": "Namma Stores <applications@nammastores.com>",
+        "RESEND_REPLY_TO_EMAIL": "official.nammastores@gmail.com",
+        "OWNER_NOTIFICATION_EMAIL": "official.nammastores@gmail.com"
+      }
+    }
+  }
+}

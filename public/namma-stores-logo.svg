@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 110" width="420" height="110" fill="none">
+  <!-- Official Namma Stores Brand Mark: Orange Roof, Green Body, White N -->
+  <g transform="translate(4, 2)">
+    <!-- Orange Roof Accent -->
+    <path d="M52 10L90 39C91.8 40.4 90.9 43 88.6 43H15.4C13.1 43 12.2 40.4 14 39L52 10Z" fill="#FF6A00"/>
+    <!-- Green Brand Body -->
+    <path d="M16.5 45H87.5L81 95C80.3 99.6 76.4 103 71.8 103H32.2C27.6 103 23.7 99.6 23 95L16.5 45Z" fill="#0A8754"/>
+    <!-- White Letter N -->
+    <path d="M39.5 87.5V57.5C39.5 56.2 40.5 55.2 41.8 55.2H44C45.2 55.2 46.2 55.8 46.9 56.8L60.5 79V57.5C60.5 56.2 61.5 55.2 62.8 55.2H65.2C66.5 55.2 67.5 56.2 67.5 57.5V87.5C67.5 88.8 66.5 89.8 65.2 89.8H63C61.8 89.8 60.8 89.2 60.1 88.2L46.5 66V87.5C46.5 88.8 45.5 89.8 44.2 89.8H41.8C40.5 89.8 39.5 88.8 39.5 87.5Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Namma Stores Brand Identity & Tagline -->
+  <text x="114" y="58" font-family="'Manrope', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="40" font-weight="800" letter-spacing="-0.02em">
+    <tspan fill="#174D35">Namma</tspan>
+    <tspan dx="8" fill="#FF6A00">Stores</tspan>
+  </text>
+
+  <!-- Official Tagline -->
+  <text x="116" y="84" font-family="'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="15.5" font-weight="600" fill="#2F855A" letter-spacing="0.01em">
+    Your local stores, Now online
+  </text>
+</svg>
