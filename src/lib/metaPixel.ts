@@ -2,9 +2,10 @@
  * Official Meta Pixel browser integration for Namma Stores Seller Partner.
  *
  * - Reuses the existing Namma Stores Website Pixel ID: 3507843232726532
- * - Opt-in consent model: defaults to NO tracking until user explicitly clicks "Accept Analytics"
- * - Persists consent decision in localStorage ('namma_analytics_consent': 'accepted' | 'rejected')
- * - Does NOT treat the seller application form privacy checkbox as analytics consent
+ * - Opt-in consent model: defaults to 'unset' (no tracking) until visitor explicitly clicks "Accept Analytics"
+ * - Only the dedicated 'namma_analytics_consent' key ('accepted') or explicit session acceptance enables tracking
+ * - Legacy 'namma_cookie_consent' or general cookie preferences NEVER grant analytics permission
+ * - Never treats the seller application form's privacy_acknowledged checkbox as analytics consent
  * - Idempotent initialization and PageView tracking (safe under React Strict Mode & rerenders)
  * - Fires standard 'Lead' event ONLY after a confirmed NEW seller application is saved AND consent is accepted
  * - Strictly non-PII: sends only `{ lead_type: 'seller_application' }` with Lead events
@@ -140,8 +141,13 @@ export function resolveMetaPixelId(
 }
 
 /**
- * Reads the persisted analytics consent decision from window or localStorage.
- * Defaults to 'unset' (no tracking) until the user explicitly chooses Accept or Reject.
+ * Reads the persisted analytics consent decision strictly from the dedicated
+ * `namma_analytics_consent` key or explicit current-session state.
+ *
+ * - Only `namma_analytics_consent === 'accepted'` or `win.__NAMMA_ANALYTICS_CONSENT__ === true`
+ *   returns `'accepted'`.
+ * - Legacy `namma_cookie_consent` or general cookie preferences NEVER grant analytics permission.
+ * - Defaults to `'unset'` when no explicit decision has been saved.
  */
 export function getAnalyticsConsentDecision(
   winOverride?: MetaPixelWindow
@@ -157,11 +163,7 @@ export function getAnalyticsConsentDecision(
       ?.trim()
       .toLowerCase();
 
-    if (
-      rawStored === 'accepted' ||
-      rawStored === 'granted' ||
-      rawStored === 'true'
-    ) {
+    if (rawStored === 'accepted') {
       return 'accepted';
     }
 
@@ -170,27 +172,6 @@ export function getAnalyticsConsentDecision(
       rawStored === 'denied' ||
       rawStored === 'false' ||
       rawStored === 'opt_out'
-    ) {
-      return 'rejected';
-    }
-
-    const legacyCookieConsent = win.localStorage
-      ?.getItem('namma_cookie_consent')
-      ?.trim()
-      .toLowerCase();
-
-    if (
-      legacyCookieConsent === 'accepted' ||
-      legacyCookieConsent === 'granted' ||
-      legacyCookieConsent === 'true'
-    ) {
-      return 'accepted';
-    }
-
-    if (
-      legacyCookieConsent === 'rejected' ||
-      legacyCookieConsent === 'denied' ||
-      legacyCookieConsent === 'false'
     ) {
       return 'rejected';
     }
@@ -209,8 +190,11 @@ export function getAnalyticsConsentDecision(
 }
 
 /**
- * Persists the user's explicit analytics consent choice ('accepted' or 'rejected').
- * When 'accepted', immediately initializes Meta Pixel and tracks PageView for the active page.
+ * Persists the visitor's explicit analytics consent choice ('accepted' or 'rejected').
+ * - When 'accepted', stores 'accepted' in `namma_analytics_consent`, initializes Meta Pixel,
+ *   and tracks PageView for the active page.
+ * - When 'rejected', stores 'rejected' in `namma_analytics_consent`, clears any pending
+ *   client-side queue events, and disables further Pixel dispatch without touching unrelated storage.
  */
 export function setAnalyticsConsentDecision(
   decision: 'accepted' | 'rejected',
@@ -227,6 +211,17 @@ export function setAnalyticsConsentDecision(
     } catch {
       // Ignore storage write errors
     }
+
+    if (decision === 'rejected') {
+      // Clear any pending client-side events so nothing queued is dispatched after rejection
+      if (win.fbq && Array.isArray(win.fbq.queue)) {
+        win.fbq.queue.length = 0;
+      }
+      // Reset tracked pageviews so if the user later opts back in ('accepted'), PageView can fire
+      if (win.__NAMMA_META_PIXEL_PAGEVIEWS__) {
+        win.__NAMMA_META_PIXEL_PAGEVIEWS__.clear();
+      }
+    }
   }
 
   if (decision === 'accepted') {
@@ -238,8 +233,8 @@ export function setAnalyticsConsentDecision(
 
 /**
  * Checks whether analytics / Meta Pixel tracking is permitted by build-time
- * configuration AND explicit user opt-in consent ('accepted').
- * Defaults to false when consent is 'unset' or 'rejected'.
+ * configuration AND explicit visitor opt-in consent ('accepted').
+ * Returns false when consent is 'unset' or 'rejected'.
  */
 export function isMetaPixelConsentGranted(options?: {
   win?: MetaPixelWindow;
@@ -289,9 +284,12 @@ export function initMetaPixel(options?: MetaPixelOptions): boolean {
     return false;
   }
 
-  // 1. Official Meta Pixel base queue function setup (idempotent)
+  // 1. Official Meta Pixel base queue function setup (idempotent, guarded by active consent)
   if (typeof win.fbq !== 'function') {
     const n: FbqFunction = function (...args: unknown[]) {
+      if (!isMetaPixelConsentGranted({ win, env })) {
+        return;
+      }
       if (typeof n.callMethod === 'function') {
         n.callMethod(...args);
       } else {

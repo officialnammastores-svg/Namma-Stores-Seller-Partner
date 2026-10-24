@@ -75,15 +75,36 @@ In the application form, you can select from our six store categories: Grocery, 
   },
 ];
 
-interface SellerFaqProps {
-  onOpenCommercialTerms?: () => void;
+export function toggleFaqItem(
+  currentOpenId: string | null,
+  targetId: string
+): string | null {
+  return currentOpenId === targetId ? null : targetId;
 }
 
-export function SellerFaq({ onOpenCommercialTerms }: SellerFaqProps) {
-  const [openId, setOpenId] = useState<string | null>('eligibility');
+interface SellerFaqProps {
+  onOpenCommercialTerms?: () => void;
+  openId?: string | null;
+  onOpenIdChange?: (nextOpenId: string | null) => void;
+}
+
+export function SellerFaq({
+  onOpenCommercialTerms,
+  openId: controlledOpenId,
+  onOpenIdChange,
+}: SellerFaqProps) {
+  const [uncontrolledOpenId, setUncontrolledOpenId] = useState<string | null>(
+    null
+  );
+  const openId =
+    controlledOpenId !== undefined ? controlledOpenId : uncontrolledOpenId;
 
   const toggleItem = (id: string) => {
-    setOpenId((prev) => (prev === id ? null : id));
+    const next = toggleFaqItem(openId, id);
+    if (controlledOpenId === undefined) {
+      setUncontrolledOpenId(next);
+    }
+    onOpenIdChange?.(next);
   };
 
   return (
@@ -131,6 +152,12 @@ export function SellerFaq({ onOpenCommercialTerms }: SellerFaqProps) {
                     aria-expanded={isOpen}
                     aria-controls={panelId}
                     onClick={() => toggleItem(item.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleItem(item.id);
+                      }
+                    }}
                     className="w-full flex items-center justify-between gap-4 text-left px-5 py-4 sm:px-6 sm:py-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2F855A] focus-visible:ring-offset-2 rounded-2xl cursor-pointer"
                   >
                     <div className="flex flex-wrap items-center gap-2.5 pr-2">

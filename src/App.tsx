@@ -78,9 +78,7 @@ export default function App() {
   };
 
   const showAnalyticsBanner =
-    !privacyModalOpen &&
-    !termsModalOpen &&
-    (analyticsDecision === 'unset' || analyticsPreferencesOpen);
+    !privacyModalOpen && !termsModalOpen && analyticsPreferencesOpen;
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FFF9EF] text-[#202820] selection:bg-[#2F855A] selection:text-white overflow-x-clip">

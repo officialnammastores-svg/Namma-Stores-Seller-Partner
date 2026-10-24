@@ -8,11 +8,15 @@ interface NavbarProps {
 }
 
 export const OFFICIAL_WHATSAPP_SELLER_COMMUNITY_URL =
-  import.meta.env.VITE_WHATSAPP_SELLER_COMMUNITY_URL ||
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.VITE_WHATSAPP_SELLER_COMMUNITY_URL) ||
   'https://chat.whatsapp.com/REPLACE_WITH_OFFICIAL_SELLER_COMMUNITY_INVITE';
 
 export const OFFICIAL_INSTAGRAM_URL =
-  import.meta.env.VITE_INSTAGRAM_URL ||
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.VITE_INSTAGRAM_URL) ||
   'https://www.instagram.com/namma.stores/';
 
 export const SOCIAL_LINKS = {

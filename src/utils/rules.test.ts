@@ -1801,10 +1801,24 @@ test('Meta Pixel Lead tracking: fires ONLY after analytics consent is accepted a
   assert.equal(win.fbq?.queue?.length, 3);
 });
 
-test('Meta Pixel consent & configuration controls: defaults to no tracking, persists Accept/Reject, supports changing consent later, and never uses form privacy checkbox as analytics consent', () => {
-  // 1. Form privacy_acknowledged=true does NOT grant analytics consent when banner decision is unset or rejected
+test('Meta Pixel consent & configuration controls: defaults to no tracking, rejects legacy cookie keys, persists Accept/Reject, supports changing consent later, and keeps form submission independent of analytics', async () => {
+  // 1. Form privacy_acknowledged=true AND legacy namma_cookie_consent=accepted/granted/true NEVER grant analytics consent
   const domUnset = createMockPixelDom();
+  domUnset.storage.set('namma_cookie_consent', 'accepted');
+  domUnset.storage.set('unrelated_user_preference', 'preserve_me');
+
   assert.equal(getAnalyticsConsentDecision(domUnset.win), 'unset');
+  assert.equal(isMetaPixelConsentGranted({ win: domUnset.win, env: {} }), false);
+
+  domUnset.storage.set('namma_cookie_consent', 'granted');
+  assert.equal(getAnalyticsConsentDecision(domUnset.win), 'unset');
+  domUnset.storage.set('namma_cookie_consent', 'true');
+  assert.equal(getAnalyticsConsentDecision(domUnset.win), 'unset');
+
+  assert.equal(
+    trackMetaPageView({ win: domUnset.win, doc: domUnset.doc, env: {} }),
+    false
+  );
   assert.equal(
     trackMetaSellerLead(
       {
@@ -1822,7 +1836,7 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
   assert.equal(domUnset.scripts.length, 0);
   assert.equal(typeof domUnset.win.fbq, 'undefined');
 
-  // 2. Rejecting analytics persists 'rejected' and blocks PageView & Lead
+  // 2. Rejecting analytics persists 'rejected', blocks PageView & Lead, and preserves unrelated storage
   assert.equal(
     setAnalyticsConsentDecision('rejected', {
       win: domUnset.win,
@@ -1834,6 +1848,10 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
   assert.equal(
     domUnset.storage.get(ANALYTICS_CONSENT_STORAGE_KEY),
     'rejected'
+  );
+  assert.equal(
+    domUnset.storage.get('unrelated_user_preference'),
+    'preserve_me'
   );
   assert.equal(getAnalyticsConsentDecision(domUnset.win), 'rejected');
   assert.equal(
@@ -1858,7 +1876,7 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
   assert.equal(domUnset.scripts.length, 1);
   assert.equal(domUnset.win.fbq?.queue?.length, 2);
 
-  // 4. Changing consent later from 'accepted' -> 'rejected' prevents subsequent Lead tracking
+  // 4. Changing consent later from 'accepted' -> 'rejected' clears pending client-side events and disables further dispatch
   assert.equal(
     setAnalyticsConsentDecision('rejected', {
       win: domUnset.win,
@@ -1867,6 +1885,11 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
     }),
     'rejected'
   );
+  assert.equal(domUnset.win.fbq?.queue?.length, 0);
+  // Direct call to win.fbq while rejected is a no-op
+  domUnset.win.fbq?.('track', 'PageView');
+  assert.equal(domUnset.win.fbq?.queue?.length, 0);
+
   assert.equal(
     trackMetaSellerLead(
       {
@@ -1880,9 +1903,63 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
     ),
     false
   );
-  assert.equal(domUnset.win.fbq?.queue?.length, 2);
+  assert.equal(domUnset.win.fbq?.queue?.length, 0);
+  assert.equal(
+    domUnset.storage.get('unrelated_user_preference'),
+    'preserve_me'
+  );
 
-  // 5. Disabled via VITE_ENABLE_ANALYTICS="false" even when user accepted consent
+  // 5. Rejecting analytics does NOT affect seller application form submission, Supabase persistence, or Resend notifications
+  const mockDb = createMockSupabase();
+  const mockResend = (async () =>
+    new Response(JSON.stringify({ id: 're_rejected_consent_ok' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as unknown as typeof fetch;
+  const apiEnv: SellerApiEnv = {
+    SUPABASE_URL: 'https://txmrfheminuminggtwfv.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'mock-service-role-key',
+    RESEND_API_KEY: 're_mock_123',
+    RESEND_FROM_EMAIL: 'Namma Stores <applications@nammastores.com>',
+  };
+
+  const submitWhileRejectedRes = await handleSellerApiRequest(
+    new Request('https://nammastores.com/api/submit-seller-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shop_name: 'Annapoorna Provision Store',
+        owner_name: 'Ramesh Kumar',
+        mobile: '9845011223',
+        email: 'ramesh@example.com',
+        shop_address: 'Shop 9, ITPL Main Road, Whitefield, Bengaluru 560066',
+        shop_category: 'grocery',
+        programme_preference: null,
+        contact_preference: 'whatsapp',
+        privacy_acknowledged: true,
+      }),
+    }),
+    apiEnv,
+    { supabaseClient: mockDb as any, fetchImpl: mockResend }
+  );
+  assert.equal(submitWhileRejectedRes.status, 201);
+  const savedWhileRejected = await submitWhileRejectedRes.json();
+  assert.equal(savedWhileRejected.ok, true);
+  assert.equal(savedWhileRejected.email_status, 'sent');
+  assert.equal(savedWhileRejected.owner_notification_status, 'sent');
+  assert.equal(mockDb.leads.length, 1);
+  assert.equal(mockDb.notifications.length, 2);
+  assert.equal(
+    trackMetaSellerLead(savedWhileRejected, {
+      win: domUnset.win,
+      doc: domUnset.doc,
+      env: {},
+    }),
+    false
+  );
+  assert.equal(domUnset.win.fbq?.queue?.length, 0);
+
+  // 6. Disabled via VITE_ENABLE_ANALYTICS="false" even when user accepted consent
   const domEnvOff = createMockPixelDom('accepted');
   assert.equal(
     isMetaPixelConsentGranted({
@@ -1901,13 +1978,259 @@ test('Meta Pixel consent & configuration controls: defaults to no tracking, pers
   );
   assert.equal(domEnvOff.scripts.length, 0);
 
-  // 6. buildSellerLeadPixelParams is frozen and strictly contains lead_type
+  // 7. buildSellerLeadPixelParams is frozen and strictly contains lead_type
   const params = buildSellerLeadPixelParams({
     shop_name: 'Should Not Leak',
     mobile: '9845012345',
   });
   assert.deepEqual(params, { lead_type: 'seller_application' });
 });
+
+test('UI components under React Strict Mode: no automatic analytics dialog on initial load, footer opens preferences dialog with current decision, and all FAQ items are collapsed by default with pointer and keyboard toggling', async () => {
+  const nodeModule = await import('node:module');
+  const fs = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const esbuild = await import('esbuild');
+
+  if (typeof nodeModule.registerHooks === 'function') {
+    nodeModule.registerHooks({
+      load(url, context, nextLoad) {
+        if (url.endsWith('.png') || url.endsWith('.svg')) {
+          return {
+            format: 'module',
+            shortCircuit: true,
+            source: `export default ${JSON.stringify(url)};`,
+          };
+        }
+        if (url.endsWith('.tsx')) {
+          const raw = fs.readFileSync(fileURLToPath(url), 'utf8');
+          const transformed = esbuild.transformSync(raw, {
+            loader: 'tsx',
+            format: 'esm',
+            jsx: 'automatic',
+          });
+          return {
+            format: 'module',
+            shortCircuit: true,
+            source: transformed.code,
+          };
+        }
+        return nextLoad(url, context);
+      },
+    });
+  }
+
+  const React = await import('react');
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { default: App } = await import('../App.tsx');
+  const { SellerFaq, FAQ_ITEMS, toggleFaqItem } = await import(
+    '../components/SellerFaq.tsx'
+  );
+  const {
+    AnalyticsConsentBanner,
+    formatAnalyticsDecisionLabel,
+  } = await import('../components/AnalyticsConsentBanner.tsx');
+  const { Footer } = await import('../components/Footer.tsx');
+
+  // 1. Render full <App /> twice (simulating initial load and refresh) under <React.StrictMode>
+  for (let mountPass = 0; mountPass < 2; mountPass++) {
+    const appHtml = renderToStaticMarkup(
+      React.createElement(React.StrictMode, null, React.createElement(App))
+    );
+
+    // Verify NO automatic Analytics Preferences dialog appears on initial page load
+    assert.equal(appHtml.includes('id="analytics-preferences-title"'), false);
+    assert.equal(appHtml.includes('role="dialog"'), false);
+
+    // Verify Footer contains the accessible "Analytics Preferences" button
+    assert.equal(appHtml.includes('>Analytics Preferences</button>'), true);
+
+    // Verify EVERY FAQ item (including the first item 'eligibility') is collapsed by default
+    assert.equal(appHtml.includes('aria-expanded="true"'), false);
+    for (const item of FAQ_ITEMS) {
+      assert.equal(
+        appHtml.includes(
+          `id="faq-button-${item.id}" type="button" aria-expanded="false" aria-controls="faq-panel-${item.id}"`
+        ),
+        true,
+        `FAQ button ${item.id} must be collapsed (aria-expanded="false") on initial load`
+      );
+      assert.equal(
+        appHtml.includes(
+          `id="faq-panel-${item.id}" role="region" aria-labelledby="faq-button-${item.id}" hidden=""`
+        ),
+        true,
+        `FAQ panel ${item.id} must have hidden attribute on initial load`
+      );
+    }
+  }
+
+  // 2. Verify <AnalyticsConsentBanner /> remains hidden when isOpen=false and opens only when isOpen=true, displaying the exact current decision
+  const closedBannerHtml = renderToStaticMarkup(
+    React.createElement(AnalyticsConsentBanner, {
+      decision: 'unset',
+      isOpen: false,
+      onAccept: () => {},
+      onReject: () => {},
+      onClose: () => {},
+      onOpenPrivacy: () => {},
+    })
+  );
+  assert.equal(closedBannerHtml, '');
+
+  for (const decision of ['unset', 'accepted', 'rejected'] as const) {
+    const openBannerHtml = renderToStaticMarkup(
+      React.createElement(AnalyticsConsentBanner, {
+        decision,
+        isOpen: true,
+        onAccept: () => {},
+        onReject: () => {},
+        onClose: () => {},
+        onOpenPrivacy: () => {},
+      })
+    );
+    assert.equal(openBannerHtml.includes('role="dialog"'), true);
+    assert.equal(openBannerHtml.includes('aria-modal="true"'), true);
+    assert.equal(openBannerHtml.includes('Accept Analytics'), true);
+    assert.equal(openBannerHtml.includes('Reject Analytics'), true);
+    assert.equal(openBannerHtml.includes('Partner Privacy Notice'), true);
+    assert.equal(
+      openBannerHtml.includes(
+        `Current status: ${formatAnalyticsDecisionLabel(decision)}`
+      ),
+      true
+    );
+  }
+
+  // 3. Verify Footer "Analytics Preferences" control triggers the callback when activated
+  let footerOpenedPreferences = false;
+  const footerElement = Footer({
+    onOpenPrivacy: () => {},
+    onOpenTerms: () => {},
+    onOpenAnalyticsPreferences: () => {
+      footerOpenedPreferences = true;
+    },
+  });
+  function findButtonByText(node: any, text: string): any {
+    if (!node || typeof node !== 'object') return null;
+    if (node.type === 'button' && node.props?.children === text) {
+      return node;
+    }
+    const children = Array.isArray(node.props?.children)
+      ? node.props.children
+      : node.props?.children
+        ? [node.props.children]
+        : [];
+    for (const child of children) {
+      const found = findButtonByText(child, text);
+      if (found) return found;
+    }
+    return null;
+  }
+  const prefsBtn = findButtonByText(footerElement, 'Analytics Preferences');
+  assert.ok(prefsBtn, 'Analytics Preferences button must exist in Footer');
+  prefsBtn.props.onClick();
+  assert.equal(footerOpenedPreferences, true);
+
+  // 4. Verify <SellerFaq /> initial state and actual pointer (onClick) & keyboard (onKeyDown Enter/Space) interactions on the component
+  const faqInitialHtml = renderToStaticMarkup(
+    React.createElement(React.StrictMode, null, React.createElement(SellerFaq))
+  );
+  assert.equal(faqInitialHtml.includes('aria-expanded="true"'), false);
+
+  function findElementById(node: any, targetId: string): any {
+    if (!node || typeof node !== 'object') return null;
+    if (node.props?.id === targetId) return node;
+    const children = Array.isArray(node.props?.children)
+      ? node.props.children
+      : node.props?.children
+        ? [node.props.children]
+        : [];
+    for (const child of children) {
+      const found = findElementById(child, targetId);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  let currentOpenId: string | null = null;
+  let capturedFaqTree: any = null;
+  function FaqTreeCapture() {
+    capturedFaqTree = SellerFaq({
+      openId: currentOpenId,
+      onOpenIdChange: (next) => {
+        currentOpenId = next;
+      },
+    });
+    return capturedFaqTree;
+  }
+  const getRenderedFaqTree = () => {
+    renderToStaticMarkup(React.createElement(FaqTreeCapture));
+    return capturedFaqTree;
+  };
+
+  // Pointer click opens first FAQ ('eligibility')
+  const firstBtn = findElementById(
+    getRenderedFaqTree(),
+    'faq-button-eligibility'
+  );
+  assert.ok(firstBtn);
+  assert.equal(firstBtn.props['aria-expanded'], false);
+  firstBtn.props.onClick();
+  assert.equal(currentOpenId, 'eligibility');
+
+  const openFirstHtml = renderToStaticMarkup(
+    React.createElement(SellerFaq, { openId: currentOpenId })
+  );
+  assert.equal(
+    openFirstHtml.includes(
+      'id="faq-button-eligibility" type="button" aria-expanded="true"'
+    ),
+    true
+  );
+  assert.equal(
+    openFirstHtml.includes(
+      'id="faq-button-review-approval" type="button" aria-expanded="false"'
+    ),
+    true
+  );
+
+  // Pointer click again closes 'eligibility'
+  findElementById(
+    getRenderedFaqTree(),
+    'faq-button-eligibility'
+  ).props.onClick();
+  assert.equal(currentOpenId, null);
+
+  // Keyboard Enter key opens 'required-documents'
+  let enterPrevented = false;
+  findElementById(
+    getRenderedFaqTree(),
+    'faq-button-required-documents'
+  ).props.onKeyDown({
+    key: 'Enter',
+    preventDefault() {
+      enterPrevented = true;
+    },
+  });
+  assert.equal(enterPrevented, true);
+  assert.equal(currentOpenId, 'required-documents');
+
+  // Keyboard Space key closes 'required-documents'
+  let spacePrevented = false;
+  findElementById(
+    getRenderedFaqTree(),
+    'faq-button-required-documents'
+  ).props.onKeyDown({
+    key: ' ',
+    preventDefault() {
+      spacePrevented = true;
+    },
+  });
+  assert.equal(spacePrevented, true);
+  assert.equal(currentOpenId, null);
+});
+
 
 
 
