@@ -1,7 +1,7 @@
 /**
  * Official Meta Pixel browser integration for Namma Stores Seller Partner.
  *
- * - Canonical Namma Stores Seller Partner Pixel ID: 2262342567669588
+ * - Canonical Namma Stores Seller Partner Pixel ID: 3507843232726532
  * - Opt-in consent model: defaults to 'unset' (no tracking) until visitor explicitly clicks "Accept Analytics"
  * - Only the dedicated 'namma_analytics_consent' key ('accepted') or explicit session acceptance enables tracking
  * - Legacy 'namma_cookie_consent' or general cookie preferences NEVER grant analytics permission
@@ -12,7 +12,7 @@
  * - Never enables automatic advanced matching or Conversions API
  */
 
-export const DEFAULT_META_PIXEL_ID = '2262342567669588';
+export const DEFAULT_META_PIXEL_ID = '3507843232726532';
 export const META_PIXEL_SCRIPT_ID = 'namma-stores-meta-pixel-script';
 export const META_PIXEL_SCRIPT_SRC =
   'https://connect.facebook.net/en_US/fbevents.js';
@@ -100,7 +100,7 @@ function getDefaultDocument(): Document | undefined {
 /**
  * Resolves the active Meta Pixel ID from Vite build-time configuration
  * (`import.meta.env.VITE_META_PIXEL_ID`) or falls back to the canonical
- * Namma Stores Seller Partner Pixel (2262342567669588).
+ * Namma Stores Seller Partner Pixel (3507843232726532).
  * Returns null if explicitly disabled or invalid.
  */
 export function resolveMetaPixelId(

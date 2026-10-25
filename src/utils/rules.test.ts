@@ -1591,15 +1591,15 @@ function createMockPixelDom(initialConsent?: 'accepted' | 'rejected') {
   return { win, doc, scripts, storage };
 }
 
-test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent initialization, PageView deduplication under React Strict Mode, and canonical Pixel ID 2262342567669588', () => {
+test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent initialization, PageView deduplication under React Strict Mode, and canonical Pixel ID 3507843232726532', () => {
   const { win, doc, scripts, storage } = createMockPixelDom();
 
-  // 1. Default Pixel ID resolves to 2262342567669588 when VITE_META_PIXEL_ID is empty or unset, and VITE_META_PIXEL_ID overrides when supplied
+  // 1. Default Pixel ID resolves to 3507843232726532 when VITE_META_PIXEL_ID is empty or unset, and VITE_META_PIXEL_ID overrides when supplied
   assert.equal(resolveMetaPixelId({}), DEFAULT_META_PIXEL_ID);
-  assert.equal(DEFAULT_META_PIXEL_ID, '2262342567669588');
+  assert.equal(DEFAULT_META_PIXEL_ID, '3507843232726532');
   assert.equal(
-    resolveMetaPixelId({ VITE_META_PIXEL_ID: '2262342567669588' }),
-    '2262342567669588'
+    resolveMetaPixelId({ VITE_META_PIXEL_ID: '3507843232726532' }),
+    '3507843232726532'
   );
   assert.equal(
     resolveMetaPixelId({ VITE_META_PIXEL_ID: '1234567890123456' }),
@@ -1639,19 +1639,20 @@ test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent 
   assert.equal(typeof win.fbq, 'function');
   assert.equal(Array.isArray(win.fbq?.queue), true);
   assert.equal(win.fbq?.queue?.length, 2);
-  // Strictly 2 arguments: ['init', '2262342567669588'] (no automatic/manual advanced matching object)
-  assert.deepEqual(win.fbq?.queue?.[0], ['init', '2262342567669588']);
+  // Strictly 2 arguments: ['init', '3507843232726532'] (no automatic/manual advanced matching object)
+  assert.deepEqual(win.fbq?.queue?.[0], ['init', '3507843232726532']);
   assert.deepEqual(win.fbq?.queue?.[1], ['track', 'PageView']);
   assert.deepEqual(
     Array.from(win.__NAMMA_META_PIXEL_INITIALIZED_IDS__ ?? []),
-    ['2262342567669588']
+    ['3507843232726532']
   );
+  // Ensure the previous Pixel ID 2262342567669588 is NOT initialized
   assert.equal(
-    win.__NAMMA_META_PIXEL_INITIALIZED_IDS__?.has('3507843232726532'),
+    win.__NAMMA_META_PIXEL_INITIALIZED_IDS__?.has('2262342567669588'),
     false
   );
 
-  // 4. Verify index.html has no raw fbq snippet, no <noscript> tracking beacon, and no legacy Pixel ID
+  // 4. Verify index.html has no raw fbq snippet, no <noscript> tracking beacon, and that production files do not reference the previous Pixel ID 2262342567669588
   const indexHtmlContent = fs.readFileSync(
     path.resolve(process.cwd(), 'index.html'),
     'utf8'
@@ -1659,7 +1660,29 @@ test('Meta Pixel: defaults to no tracking until consent is accepted, idempotent 
   assert.equal(indexHtmlContent.includes('fbevents.js'), false);
   assert.equal(indexHtmlContent.includes('facebook.com/tr'), false);
   assert.equal(indexHtmlContent.includes('<noscript'), false);
-  assert.equal(indexHtmlContent.includes('3507843232726532'), false);
+  assert.equal(indexHtmlContent.includes('2262342567669588'), false);
+
+  for (const relPath of [
+    'src/lib/metaPixel.ts',
+    'src/components/LegalModals.tsx',
+    '.env.example',
+    'wrangler.jsonc',
+  ]) {
+    const fileContent = fs.readFileSync(
+      path.resolve(process.cwd(), relPath),
+      'utf8'
+    );
+    assert.equal(
+      fileContent.includes('3507843232726532'),
+      true,
+      `${relPath} must use canonical Pixel ID 3507843232726532`
+    );
+    assert.equal(
+      fileContent.includes('2262342567669588'),
+      false,
+      `${relPath} must not contain previous Pixel ID 2262342567669588`
+    );
+  }
 });
 
 test('Meta Pixel Lead tracking: fires ONLY after analytics consent is accepted and a NEW seller submission is confirmed, with non-PII lead_type and never on failures or duplicates', async () => {
@@ -2361,7 +2384,7 @@ test('UI components under React Strict Mode: compact non-blocking first-visit co
   assert.equal(acceptBtn.props['aria-pressed'], false);
   assert.equal(rejectBtn.props['aria-pressed'], false);
 
-  // Visitor clicks "Accept Analytics" -> persists 'accepted', initializes Pixel 2262342567669588, fires PageView once, and hides bar
+  // Visitor clicks "Accept Analytics" -> persists 'accepted', initializes Pixel 3507843232726532, fires PageView once, and hides bar
   acceptBtn.props.onClick();
   assert.equal(isConsentBarVisible(), false);
   assert.equal(currentDecision, 'accepted');
@@ -2372,12 +2395,18 @@ test('UI components under React Strict Mode: compact non-blocking first-visit co
   assert.equal(interactivePixelDom.scripts.length, 1);
   assert.deepEqual(interactivePixelDom.win.fbq?.queue?.[0], [
     'init',
-    '2262342567669588',
+    '3507843232726532',
   ]);
   assert.deepEqual(interactivePixelDom.win.fbq?.queue?.[1], [
     'track',
     'PageView',
   ]);
+  assert.equal(
+    interactivePixelDom.win.__NAMMA_META_PIXEL_INITIALIZED_IDS__?.has(
+      '2262342567669588'
+    ),
+    false
+  );
   assert.equal(renderInteractiveDialog(), null);
 
   // Visitor re-opens "Analytics Preferences" from Footer and clicks "Reject Analytics" -> persists 'rejected', clears queue, and hides bar
